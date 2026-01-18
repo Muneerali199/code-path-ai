@@ -17,29 +17,42 @@ interface GuideAIChatProps {
   sessionId?: string;
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/guide-ai`;
-
 export default function GuideAIChat({ code, language }: GuideAIChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     // Scroll to bottom when messages change
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 
   const streamChat = async (userMessage: string) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: userMessage,
     };
-    
+
+    if (!supabaseUrl || !supabaseKey) {
+      setMessages(prev => [
+        ...prev,
+        userMsg,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content:
+            'Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your environment.',
+        },
+      ]);
+      return;
+    }
+
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
     
@@ -47,11 +60,11 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
     const assistantId = crypto.randomUUID();
 
     try {
-      const resp = await fetch(CHAT_URL, {
+      const resp = await fetch(`${supabaseUrl}/functions/v1/guide-ai`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${supabaseKey}`,
         },
         body: JSON.stringify({
           messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })),
@@ -141,7 +154,7 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-card rounded-lg overflow-hidden border border-border">
+    <div className="h-full flex flex-col bg-panel rounded-lg overflow-hidden border border-border">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-border">
         <div className="p-1.5 bg-primary/10 rounded">
@@ -154,7 +167,7 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      <ScrollArea className="flex-1 p-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
             <Bot className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -179,10 +192,10 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
                 )}
                 <div
                   className={cn(
-                    'max-w-[80%] rounded-lg px-4 py-2 text-sm',
+                    'max-w-[80%] rounded-lg px-4 py-2 text-sm border border-border/60',
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-secondary-foreground'
+                      : 'bg-editor text-foreground'
                   )}
                 >
                   <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
@@ -199,17 +212,18 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                   <Bot className="h-4 w-4 text-primary" />
                 </div>
-                <div className="bg-secondary rounded-lg px-4 py-2">
+                <div className="bg-editor border border-border/60 rounded-lg px-4 py-2">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               </div>
             )}
+            <div ref={endRef} />
           </div>
         )}
       </ScrollArea>
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="p-4 border-t border-border">
+      <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-panel-header">
         <div className="flex gap-2">
           <Textarea
             ref={textareaRef}
@@ -217,7 +231,7 @@ export default function GuideAIChat({ code, language }: GuideAIChatProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask Guide-AI about your code..."
-            className="min-h-[44px] max-h-[120px] resize-none bg-secondary"
+            className="min-h-[44px] max-h-[120px] resize-none bg-editor text-foreground placeholder:text-muted-foreground border-border focus-visible:ring-1 focus-visible:ring-ring"
             rows={1}
           />
           <Button type="submit" size="icon" disabled={!input.trim() || isLoading}>

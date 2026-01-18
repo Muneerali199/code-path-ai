@@ -5,10 +5,11 @@ interface CodeEditorProps {
   value: string;
   onChange: (value: string | undefined) => void;
   language: string;
+  path?: string;
   readOnly?: boolean;
 }
 
-export default function CodeEditor({ value, onChange, language, readOnly = false }: CodeEditorProps) {
+export default function CodeEditor({ value, onChange, language, path, readOnly = false }: CodeEditorProps) {
   const editorRef = useRef<any>(null);
 
   const handleEditorDidMount: OnMount = (editor) => {
@@ -22,6 +23,7 @@ export default function CodeEditor({ value, onChange, language, readOnly = false
         height="100%"
         language={language}
         value={value}
+        path={path}
         onChange={onChange}
         onMount={handleEditorDidMount}
         theme="vs-dark"
