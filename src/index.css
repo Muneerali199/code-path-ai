@@ -113,6 +113,34 @@
     --panel-bg: 220 18% 5%;
     --panel-header: 220 18% 6.5%;
 
+    /* VS Code Dark+ Theme Colors */
+    --vscode-editor-bg: 220 16% 12%; /* #1E1E1E */
+    --vscode-editor-fg: 220 13% 84%; /* #D4D4D4 */
+    --vscode-line-number: 220 8% 52%; /* #858585 */
+    --vscode-selection: 220 64% 31%; /* #264F78 */
+    --vscode-comment: 120 25% 54%; /* #6A9955 */
+    --vscode-keyword: 280 35% 66%; /* #C586C0 */
+    --vscode-string: 15 78% 66%; /* #CE9178 */
+    --vscode-function: 50 67% 69%; /* #DCDCAA */
+    --vscode-variable: 200 60% 62%; /* #9CDCFE */
+    --vscode-type: 180 45% 62%; /* #4EC9B0 */
+    --vscode-number: 100 35% 66%; /* #B5CEA8 */
+    --vscode-operator: 220 13% 84%; /* #D4D4D4 */
+    --vscode-bracket-match: 120 100% 25%; /* #006400 */
+    --vscode-gutter-bg: 220 16% 12%; /* #1E1E1E */
+    --vscode-widget-bg: 220 15% 19%; /* #2D2D30 */
+    --vscode-status-bar: 210 100% 48%; /* #007ACC */
+    --vscode-activity-bar: 220 18% 15%; /* #2D2D30 */
+    --vscode-side-bar: 220 18% 15%; /* #252526 */
+    --vscode-tab-active: 220 16% 12%; /* #1E1E1E */
+    --vscode-tab-inactive: 220 15% 18%; /* #2D2D30 */
+
+    /* Enhanced AI colors */
+    --ai-explain: 280 76% 66%; /* Purple for explanation */
+    --ai-generate: 210 82% 66%; /* Blue for generation */
+    --ai-suggestion: 45 92% 58%; /* Yellow for suggestions */
+    --ai-error: 0 84% 60%; /* Red for errors */
+
     /* Syntax highlighting - vibrant colors for dark bg */
     --syntax-keyword: 207 82% 66%;
     --syntax-string: 95 38% 62%;
@@ -180,6 +208,107 @@
 
   .line-highlight {
     background: hsl(var(--editor-line-highlight));
+  }
+
+  /* VS Code Dark+ specific classes */
+  .vscode-editor-bg {
+    background: hsl(var(--vscode-editor-bg));
+  }
+
+  .vscode-editor-fg {
+    color: hsl(var(--vscode-editor-fg));
+  }
+
+  .vscode-line-number {
+    color: hsl(var(--vscode-line-number));
+  }
+
+  .vscode-selection {
+    background: hsl(var(--vscode-selection));
+  }
+
+  .vscode-comment {
+    color: hsl(var(--vscode-comment));
+  }
+
+  .vscode-keyword {
+    color: hsl(var(--vscode-keyword));
+  }
+
+  .vscode-string {
+    color: hsl(var(--vscode-string));
+  }
+
+  .vscode-function {
+    color: hsl(var(--vscode-function));
+  }
+
+  .vscode-variable {
+    color: hsl(var(--vscode-variable));
+  }
+
+  .vscode-type {
+    color: hsl(var(--vscode-type));
+  }
+
+  .vscode-number {
+    color: hsl(var(--vscode-number));
+  }
+
+  .vscode-operator {
+    color: hsl(var(--vscode-operator));
+  }
+
+  .vscode-status-bar {
+    background: hsl(var(--vscode-status-bar));
+  }
+
+  .vscode-side-bar {
+    background: hsl(var(--vscode-side-bar));
+  }
+
+  .vscode-tab-active {
+    background: hsl(var(--vscode-tab-active));
+  }
+
+  .vscode-tab-inactive {
+    background: hsl(var(--vscode-tab-inactive));
+  }
+
+  /* AI-specific colors */
+  .ai-explain {
+    color: hsl(var(--ai-explain));
+  }
+
+  .ai-generate {
+    color: hsl(var(--ai-generate));
+  }
+
+  .ai-suggestion {
+    color: hsl(var(--ai-suggestion));
+  }
+
+  .ai-error {
+    color: hsl(var(--ai-error));
+  }
+
+  /* Enhanced scrollbar for IDE */
+  .ide-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .ide-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--vscode-editor-bg));
+  }
+
+  .ide-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--vscode-line-number) / 0.6);
+    border-radius: 4px;
+  }
+
+  .ide-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--vscode-line-number) / 0.8);
   }
 
   /* Code syntax classes */
