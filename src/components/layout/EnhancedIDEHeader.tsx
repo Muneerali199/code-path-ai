@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 interface Project {
   id: string
@@ -49,7 +50,9 @@ interface Project {
 interface EnhancedIDEHeaderProps {
   project: Project
   aiPanelVisible: boolean
+  previewVisible: boolean
   onToggleAI: () => void
+  onTogglePreview: () => void
 }
 
 const languageOptions = [
@@ -91,7 +94,7 @@ const templateCategories = [
   { name: 'AI/ML', icon: <Zap className="w-4 h-4" />, templates: ['TensorFlow', 'PyTorch', 'Keras', 'OpenAI'] }
 ]
 
-export default function EnhancedIDEHeader({ project, aiPanelVisible, onToggleAI }: EnhancedIDEHeaderProps) {
+export default function EnhancedIDEHeader({ project, aiPanelVisible, previewVisible, onToggleAI, onTogglePreview }: EnhancedIDEHeaderProps) {
   const [selectedLanguage, setSelectedLanguage] = useState('javascript')
   const [selectedTheme, setSelectedTheme] = useState('custom-dark')
   const [showSearch, setShowSearch] = useState(false)
@@ -134,7 +137,7 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, onToggleAI 
   }
 
   return (
-    <div className="bg-slate-800 border-b border-slate-700 px-4 py-2">
+    <div className="bg-[#09090b] border-b border-white/10 px-4 py-2">
       <div className="flex items-center justify-between">
         {/* Left Section - Logo and Project Info */}
         <div className="flex items-center space-x-4">
@@ -358,6 +361,20 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, onToggleAI 
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Preview Toggle */}
+          <Button
+            variant={previewVisible ? "default" : "outline"}
+            size="sm"
+            onClick={onTogglePreview}
+            className={cn(
+              "flex items-center space-x-2",
+              previewVisible ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700" : "border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
+            )}
+          >
+            <Play className="w-4 h-4" />
+            <span className="hidden md:inline">Preview</span>
+          </Button>
 
           {/* AI Toggle */}
           <Button

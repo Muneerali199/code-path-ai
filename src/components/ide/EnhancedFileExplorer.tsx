@@ -83,6 +83,7 @@ const FileTreeItem = ({
     if (isFolder) {
       onToggleExpand(node.id)
     } else {
+      console.log("Selected file:", node.name, node.id) // Debug log
       onFileSelect(node)
     }
   }
@@ -485,9 +486,9 @@ export default function EnhancedFileExplorer({
   const filteredFiles = filterFiles([...fileTree])
 
   return (
-    <div className={cn("flex flex-col h-full bg-slate-800 border-r border-slate-700", className)}>
+    <div className={cn("flex flex-col h-full bg-[#09090b] border-r border-white/10", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-slate-700">
+      <div className="flex items-center justify-between p-3 border-b border-white/10">
         <h3 className="text-sm font-medium text-slate-300">EXPLORER</h3>
         <div className="flex items-center space-x-1">
           <Popover>
@@ -516,14 +517,14 @@ export default function EnhancedFileExplorer({
       </div>
 
       {/* Search */}
-      <div className="p-3 border-b border-slate-700">
+      <div className="p-3 border-b border-white/10">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
           <Input
             placeholder="Search files..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 bg-slate-700 border-slate-600 text-white placeholder-slate-400 text-xs h-8"
+            className="pl-8 bg-white/5 border-white/10 text-white placeholder-slate-400 text-xs h-8 focus:bg-white/10"
           />
           {searchTerm && (
             <Button
@@ -563,7 +564,7 @@ export default function EnhancedFileExplorer({
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-slate-700 text-xs text-slate-400">
+      <div className="p-3 border-t border-white/10 text-xs text-slate-400">
         <div className="flex justify-between">
           <span>{fileTree.length} items</span>
           <span>{searchTerm ? `${filteredFiles.length} matches` : ''}</span>

@@ -3,10 +3,12 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import EnhancedFileExplorer from '@/components/ide/EnhancedFileExplorer'
 import EnhancedCodeEditor from '@/components/editor/EnhancedCodeEditor'
 import DualAISystem from '@/components/ai/DualAISystem'
-import { OutputPanel } from '@/components/editor/OutputPanel'
-import { StatusBar } from '@/components/ide/StatusBar'
+import OutputPanel from '@/components/editor/OutputPanel'
+import StatusBar from '@/components/ide/StatusBar'
 import EnhancedIDEHeader from './EnhancedIDEHeader'
 import { toast } from 'sonner'
+
+import PreviewPanel from '@/components/editor/PreviewPanel'
 
 interface FileNode {
   id: string
@@ -34,6 +36,7 @@ export default function EnhancedIDELayout() {
   const [output, setOutput] = useState<string>('')
   const [isExecuting, setIsExecuting] = useState(false)
   const [aiPanelVisible, setAiPanelVisible] = useState(true)
+  const [previewVisible, setPreviewVisible] = useState(false)
 
   // Load project from localStorage or create default
   useEffect(() => {
@@ -103,10 +106,9 @@ export default function EnhancedIDELayout() {
 
   // Handle file selection
   const handleFileSelect = (file: FileNode) => {
-    if (file.type === 'file') {
-      setActiveFile(file)
-      toast.info(`Opened ${file.name}`)
-    }
+    console.log("Setting active file:", file.name, file.id);
+    setActiveFile(file)
+    toast.info(`Opened ${file.name}`)
   }
 
   // Handle file changes
@@ -218,24 +220,74 @@ export default function EnhancedIDELayout() {
     }
   }
 
+  // Handle AI file generation
+  const handleFilesGenerated = (newFiles: any[]) => {
+    // Helper to process files and ensure IDs
+    const processFiles = (items: any[]): FileNode[] => {
+      return items.map(item => ({
+        id: item.id || `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: item.name,
+        type: item.type,
+        content: item.content,
+        language: item.language,
+        children: item.children ? processFiles(item.children) : undefined,
+        isExpanded: item.type === 'folder' // Auto expand generated folders
+      }))
+    }
+
+    const processedFiles = processFiles(newFiles)
+    setFiles(processedFiles)
+
+    // Update project
+    if (project) {
+      const updatedProject = { ...project, files: processedFiles }
+      setProject(updatedProject)
+      localStorage.setItem('currentProject', JSON.stringify(updatedProject))
+    }
+
+    // Set first file as active (e.g. App.tsx or index.tsx or README)
+    const findFileByName = (nodes: FileNode[], name: string): FileNode | null => {
+      for (const node of nodes) {
+        if (node.name === name) return node
+        if (node.children) {
+          const found = findFileByName(node.children, name)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
+    const mainFile = findFileByName(processedFiles, 'App.tsx') || 
+                     findFileByName(processedFiles, 'index.tsx') || 
+                     findFirstFile(processedFiles)
+    
+    if (mainFile) {
+      setActiveFile(mainFile)
+    }
+    
+    toast.success('Project structure generated successfully')
+  }
+
   if (!project) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-900 text-white">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p>Loading project...</p>
+          <p>Loading CodePath AI IDE...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-900 text-white">
+    <div className="h-screen flex flex-col bg-[#09090b] text-white">
       {/* Header */}
       <EnhancedIDEHeader 
         project={project}
         aiPanelVisible={aiPanelVisible}
+        previewVisible={previewVisible}
         onToggleAI={() => setAiPanelVisible(!aiPanelVisible)}
+        onTogglePreview={() => setPreviewVisible(!previewVisible)}
       />
 
       {/* Main Content */}
@@ -252,36 +304,42 @@ export default function EnhancedIDELayout() {
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-slate-800 hover:bg-slate-700 transition-colors" />
+          <PanelResizeHandle className="w-1 bg-white/10 hover:bg-white/20 transition-colors" />
 
           {/* Code Editor */}
           <Panel defaultSize={50} minSize={30}>
-            <div className="h-full flex flex-col">
-              <EnhancedCodeEditor
-                file={activeFile}
-                onFileChange={handleCodeChange}
-                onExecute={handleExecute}
-                className="flex-1"
-              />
-              
-              {/* Output Panel */}
-              <OutputPanel
-                output={output}
-                isExecuting={isExecuting}
-                className="h-48 border-t border-slate-700"
-              />
-            </div>
+            {previewVisible ? (
+              <PreviewPanel files={files} />
+            ) : (
+              <div className="h-full flex flex-col">
+                <EnhancedCodeEditor
+                  file={activeFile}
+                  onFileChange={handleCodeChange}
+                  onExecute={handleExecute}
+                  className="flex-1"
+                />
+                
+                {/* Output Panel */}
+                <OutputPanel
+                  output={output}
+                  isRunning={isExecuting}
+                  className="h-48 border-t border-white/10"
+                />
+              </div>
+            )}
           </Panel>
 
           {/* AI Panel */}
           {aiPanelVisible && (
             <>
-              <PanelResizeHandle className="w-1 bg-slate-800 hover:bg-slate-700 transition-colors" />
+              <PanelResizeHandle className="w-1 bg-white/10 hover:bg-white/20 transition-colors" />
               <Panel defaultSize={30} minSize={20} maxSize={40}>
                 <DualAISystem
                   code={activeFile?.content || ''}
                   language={activeFile?.language || 'javascript'}
+                  files={files}
                   onCodeUpdate={handleAICodeUpdate}
+                  onFilesGenerated={handleFilesGenerated}
                   className="h-full"
                 />
               </Panel>
@@ -291,9 +349,10 @@ export default function EnhancedIDELayout() {
       </div>
 
       {/* Status Bar */}
-      <StatusBar 
-        activeFile={activeFile}
-        project={project}
+      <StatusBar
+        activePath={activeFile?.name ?? ''}
+        language={activeFile?.language ?? 'javascript'}
+        isRunning={isExecuting}
         className="h-6"
       />
     </div>

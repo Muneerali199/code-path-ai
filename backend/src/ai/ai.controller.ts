@@ -2,19 +2,36 @@ import { Controller, Post, Body, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 
-export interface ChatRequest {
+import { IsString, IsOptional, IsObject, IsArray } from 'class-validator';
+
+export class ChatRequest {
+  @IsString()
   message: string;
+
+  @IsOptional()
+  @IsString()
   provider?: 'openai' | 'claude' | 'gemini' | 'local';
+
+  @IsOptional()
+  @IsString()
   mode?: 'explain' | 'create';
+
+  @IsOptional()
+  @IsObject()
   context?: {
     files?: Array<{ path: string; content: string }>;
     activeFile?: string;
   };
 }
 
-export interface ChatResponse {
+export class ChatResponse {
+  @IsString()
   response: string;
+
+  @IsString()
   provider: string;
+
+  @IsString()
   mode: string;
 }
 

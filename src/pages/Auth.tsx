@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,14 @@ export default function Auth() {
   const navigate = useNavigate();
   const { user, signUp, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getPostAuthRoute = useCallback(() => {
+    try {
+      return localStorage.getItem('currentProject') ? '/app' : '/create-project';
+    } catch {
+      return '/create-project';
+    }
+  }, []);
   
   // Sign In state
   const [signInEmail, setSignInEmail] = useState('');
@@ -31,9 +39,9 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/');
+      navigate(getPostAuthRoute());
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, getPostAuthRoute]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +68,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Welcome back!');
-      navigate('/');
+      navigate(getPostAuthRoute());
     }
   };
 
@@ -89,7 +97,7 @@ export default function Auth() {
       }
     } else {
       toast.success('Account created! You can now start coding.');
-      navigate('/');
+      navigate(getPostAuthRoute());
     }
   };
 

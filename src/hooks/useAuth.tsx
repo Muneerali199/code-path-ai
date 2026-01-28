@@ -62,10 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Defer profile fetch with setTimeout to prevent deadlocks
         if (session?.user) {
           setTimeout(() => {
-            fetchProfile(session.user.id).then(setProfile);
+            fetchProfile(session.user.id).then((p) => {
+               setProfile(p);
+               // IMPORTANT: Ensure loading is set to false after profile attempt
+               setLoading(false); 
+            });
           }, 0);
         } else {
           setProfile(null);
+          setLoading(false);
         }
       }
     );

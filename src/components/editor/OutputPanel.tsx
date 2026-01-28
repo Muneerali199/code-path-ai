@@ -1,17 +1,19 @@
 import { Terminal, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface OutputPanelProps {
   output: string;
   error?: string;
   isRunning: boolean;
+  className?: string;
 }
 
-export default function OutputPanel({ output, error, isRunning }: OutputPanelProps) {
+export default function OutputPanel({ output, error, isRunning, className }: OutputPanelProps) {
   return (
-    <div className="h-full flex flex-col bg-terminal rounded-lg overflow-hidden">
+    <div className={cn("h-full flex flex-col bg-[#09090b] rounded-lg overflow-hidden", className)}>
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-panel-header border-b border-border">
+      <div className="flex items-center gap-2 px-4 py-2 bg-[#09090b] border-b border-white/10">
         <Terminal className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground">Output</span>
         {isRunning && (
@@ -35,7 +37,7 @@ export default function OutputPanel({ output, error, isRunning }: OutputPanelPro
       </div>
 
       {/* Output Content */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-4 bg-[#09090b]">
         {!output && !error && !isRunning && (
           <p className="text-muted-foreground text-sm font-mono">
             Run your code to see output here...
@@ -60,3 +62,5 @@ export default function OutputPanel({ output, error, isRunning }: OutputPanelPro
     </div>
   );
 }
+
+export { OutputPanel };

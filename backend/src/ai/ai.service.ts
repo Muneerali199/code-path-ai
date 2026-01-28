@@ -12,17 +12,24 @@ export class AiService {
   private gemini: GoogleGenerativeAI;
 
   constructor(private configService: ConfigService) {
-    this.openai = new OpenAI({
-      apiKey: this.configService.get<string>('OPENAI_API_KEY'),
-    });
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    if (openaiKey) {
+      this.openai = new OpenAI({
+        apiKey: openaiKey,
+      });
+    }
 
-    this.claude = new Anthropic({
-      apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
-    });
+    const anthropicKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+    if (anthropicKey) {
+      this.claude = new Anthropic({
+        apiKey: anthropicKey,
+      });
+    }
 
-    this.gemini = new GoogleGenerativeAI(
-      this.configService.get<string>('GOOGLE_AI_API_KEY')
-    );
+    const googleKey = this.configService.get<string>('GOOGLE_AI_API_KEY');
+    if (googleKey) {
+      this.gemini = new GoogleGenerativeAI(googleKey);
+    }
   }
 
   async chat(request: {
@@ -71,6 +78,10 @@ export class AiService {
   }
 
   private async chatWithOpenAI(request: any, mode: string): Promise<string> {
+    if (!this.openai) {
+      throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in your environment.');
+    }
+    
     const systemPrompt = this.getSystemPrompt(mode, request.context);
     
     const completion = await this.openai.chat.completions.create({
@@ -86,6 +97,10 @@ export class AiService {
   }
 
   private async chatWithClaude(request: any, mode: string): Promise<string> {
+    if (!this.claude) {
+      throw new Error('Anthropic API key not configured. Please set ANTHROPIC_API_KEY in your environment.');
+    }
+    
     const systemPrompt = this.getSystemPrompt(mode, request.context);
     
     const message = await this.claude.messages.create({
@@ -103,6 +118,10 @@ export class AiService {
   }
 
   private async chatWithGemini(request: any, mode: string): Promise<string> {
+    if (!this.gemini) {
+      throw new Error('Google AI API key not configured. Please set GOOGLE_AI_API_KEY in your environment.');
+    }
+    
     const systemPrompt = this.getSystemPrompt(mode, request.context);
     
     const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-pro' });

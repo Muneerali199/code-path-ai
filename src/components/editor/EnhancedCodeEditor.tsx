@@ -89,7 +89,7 @@ export default function EnhancedCodeEditor({
   const [wordWrap, setWordWrap] = useState('on')
   const [minimapEnabled, setMinimapEnabled] = useState(true)
   const [showLineNumbers, setShowLineNumbers] = useState(true)
-  const [showFoldingControls, setShowFoldingControls] = useState(true')
+  const [showFoldingControls, setShowFoldingControls] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
@@ -227,6 +227,17 @@ export default function EnhancedCodeEditor({
       monacoRef.current.editor.setTheme('custom-dark')
     }
   }, [])
+
+  useEffect(() => {
+    // Scroll to bottom when content changes to simulate streaming
+    if (editorRef.current && file) {
+      const model = editorRef.current.getModel();
+      if (model) {
+        const lineCount = model.getLineCount();
+        editorRef.current.revealLine(lineCount);
+      }
+    }
+  }, [file?.content]);
 
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor
@@ -514,7 +525,7 @@ export default function EnhancedCodeEditor({
 
   if (!file) {
     return (
-      <div className={cn("flex items-center justify-center h-full bg-slate-900 text-slate-400", className)}>
+      <div className={cn("flex items-center justify-center h-full bg-[#09090b] text-slate-400", className)}>
         <div className="text-center">
           <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p className="text-lg">No file selected</p>
@@ -528,9 +539,9 @@ export default function EnhancedCodeEditor({
   const currentLanguage = languageMap[file.language] || file.language || 'plaintext'
 
   return (
-    <div className={cn("flex flex-col h-full bg-slate-900", className)}>
+    <div className={cn("flex flex-col h-full bg-[#09090b]", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 bg-slate-800 border-b border-slate-700">
+      <div className="flex items-center justify-between p-3 bg-[#09090b] border-b border-white/10">
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-1 text-sm text-slate-300">
             <Code className="w-4 h-4" />
@@ -627,24 +638,24 @@ export default function EnhancedCodeEditor({
 
       {/* Search Panel */}
       {showSearch && (
-        <div className="p-3 bg-slate-800 border-b border-slate-700">
+        <div className="p-3 bg-[#09090b] border-b border-white/10">
           <div className="flex items-center space-x-2">
             <Input
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-slate-700 border-slate-600 text-white placeholder-slate-400 h-8 text-sm"
+              className="bg-white/5 border-white/10 text-white placeholder-slate-400 h-8 text-sm focus:bg-white/10"
             />
             <Input
               placeholder="Replace..."
               value={replaceTerm}
               onChange={(e) => setReplaceTerm(e.target.value)}
-              className="bg-slate-700 border-slate-600 text-white placeholder-slate-400 h-8 text-sm"
+              className="bg-white/5 border-white/10 text-white placeholder-slate-400 h-8 text-sm focus:bg-white/10"
             />
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-slate-700"
+              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-white/10"
               onClick={handleSearch}
             >
               Find
@@ -652,7 +663,7 @@ export default function EnhancedCodeEditor({
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-slate-700"
+              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-white/10"
               onClick={handleReplace}
             >
               Replace
@@ -663,14 +674,14 @@ export default function EnhancedCodeEditor({
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="p-3 bg-slate-800 border-b border-slate-700">
+        <div className="p-3 bg-[#09090b] border-b border-white/10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Theme</label>
               <select
                 value={theme}
                 onChange={(e) => setTheme(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded px-2 py-1"
+                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
               >
                 {themeOptions.map(option => (
                   <option key={option.id} value={option.id}>{option.name}</option>
@@ -682,7 +693,7 @@ export default function EnhancedCodeEditor({
               <select
                 value={fontSize}
                 onChange={(e) => setFontSize(Number(e.target.value))}
-                className="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded px-2 py-1"
+                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
               >
                 {fontSizeOptions.map(size => (
                   <option key={size} value={size}>{size}px</option>
@@ -694,7 +705,7 @@ export default function EnhancedCodeEditor({
               <select
                 value={tabSize}
                 onChange={(e) => setTabSize(Number(e.target.value))}
-                className="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded px-2 py-1"
+                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
               >
                 {tabSizeOptions.map(size => (
                   <option key={size} value={size}>{size}</option>
@@ -706,7 +717,7 @@ export default function EnhancedCodeEditor({
               <select
                 value={wordWrap}
                 onChange={(e) => setWordWrap(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 text-white text-xs rounded px-2 py-1"
+                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
               >
                 <option value="on">On</option>
                 <option value="off">Off</option>
@@ -781,6 +792,7 @@ export default function EnhancedCodeEditor({
             smoothScrolling: true,
             cursorBlinking: 'smooth',
             cursorSmoothCaretAnimation: 'on',
+            readOnly: false, // Ensure editable
             bracketPairColorization: {
               enabled: true,
               independentColorPoolPerBracketType: true
@@ -805,7 +817,7 @@ export default function EnhancedCodeEditor({
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between p-2 bg-slate-800 border-t border-slate-700 text-xs text-slate-400">
+      <div className="flex items-center justify-between p-2 bg-[#09090b] border-t border-white/10 text-xs text-slate-400">
         <div className="flex items-center space-x-4">
           <span>Ln {editorRef.current?.getPosition()?.lineNumber || 1}, Col {editorRef.current?.getPosition()?.column || 1}</span>
           <span>{file.language.toUpperCase()}</span>
