@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
-import { Code2, GraduationCap, Briefcase, Loader2 } from 'lucide-react';
+import { Code2, GraduationCap, Briefcase, Loader2, Chrome } from 'lucide-react';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
@@ -16,7 +16,7 @@ const passwordSchema = z.string().min(6, 'Password must be at least 6 characters
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, signUp, signIn, loading } = useAuth();
+  const { user, signUp, signIn, signInWithGoogle, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getPostAuthRoute = useCallback(() => {
@@ -68,6 +68,19 @@ export default function Auth() {
       }
     } else {
       toast.success('Welcome back!');
+      navigate(getPostAuthRoute());
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsSubmitting(true);
+    const { error } = await signInWithGoogle(signUpRole);
+    setIsSubmitting(false);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Signed in with Google!');
       navigate(getPostAuthRoute());
     }
   };
@@ -142,139 +155,187 @@ export default function Auth() {
 
               {/* Sign In Tab */}
               <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={signInEmail}
-                      onChange={(e) => setSignInEmail(e.target.value)}
-                      required
-                      className="bg-secondary"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={signInPassword}
-                      onChange={(e) => setSignInPassword(e.target.value)}
-                      required
-                      className="bg-secondary"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      'Sign In'
-                    )}
+                <div className="space-y-4">
+                  <Button 
+                    variant="outline" 
+                    type="button" 
+                    className="w-full" 
+                    onClick={handleGoogleSignIn}
+                    disabled={isSubmitting}
+                  >
+                    <Chrome className="mr-2 h-4 w-4" />
+                    Sign in with Google
                   </Button>
-                </form>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSignIn} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-email">Email</Label>
+                      <Input
+                        id="signin-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={signInEmail}
+                        onChange={(e) => setSignInEmail(e.target.value)}
+                        required
+                        className="bg-secondary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signin-password">Password</Label>
+                      <Input
+                        id="signin-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={signInPassword}
+                        onChange={(e) => setSignInPassword(e.target.value)}
+                        required
+                        className="bg-secondary"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Signing in...
+                        </>
+                      ) : (
+                        'Sign In'
+                      )}
+                    </Button>
+                  </form>
+                </div>
               </TabsContent>
 
               {/* Sign Up Tab */}
               <TabsContent value="signup">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="John Doe"
-                      value={signUpFullName}
-                      onChange={(e) => setSignUpFullName(e.target.value)}
-                      className="bg-secondary"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={signUpEmail}
-                      onChange={(e) => setSignUpEmail(e.target.value)}
-                      required
-                      className="bg-secondary"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={signUpPassword}
-                      onChange={(e) => setSignUpPassword(e.target.value)}
-                      required
-                      className="bg-secondary"
-                    />
-                  </div>
+                <div className="space-y-4">
+                  <Button 
+                    variant="outline" 
+                    type="button" 
+                    className="w-full" 
+                    onClick={handleGoogleSignIn}
+                    disabled={isSubmitting}
+                  >
+                    <Chrome className="mr-2 h-4 w-4" />
+                    Sign up with Google
+                  </Button>
                   
-                  {/* Role Selection */}
-                  <div className="space-y-3">
-                    <Label>I am a...</Label>
-                    <RadioGroup
-                      value={signUpRole}
-                      onValueChange={(value) => setSignUpRole(value as 'learner' | 'employer')}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div>
-                        <RadioGroupItem
-                          value="learner"
-                          id="learner"
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor="learner"
-                          className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-secondary p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                        >
-                          <GraduationCap className="mb-2 h-6 w-6" />
-                          <span className="font-medium">Learner</span>
-                          <span className="text-xs text-muted-foreground text-center mt-1">
-                            Learn & practice coding
-                          </span>
-                        </Label>
-                      </div>
-                      <div>
-                        <RadioGroupItem
-                          value="employer"
-                          id="employer"
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor="employer"
-                          className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-secondary p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
-                        >
-                          <Briefcase className="mb-2 h-6 w-6" />
-                          <span className="font-medium">Employer</span>
-                          <span className="text-xs text-muted-foreground text-center mt-1">
-                            Assess candidates
-                          </span>
-                        </Label>
-                      </div>
-                    </RadioGroup>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or continue with
+                      </span>
+                    </div>
                   </div>
 
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      'Create Account'
-                    )}
-                  </Button>
-                </form>
+                  <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-name">Full Name</Label>
+                      <Input
+                        id="signup-name"
+                        type="text"
+                        placeholder="John Doe"
+                        value={signUpFullName}
+                        onChange={(e) => setSignUpFullName(e.target.value)}
+                        className="bg-secondary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-email">Email</Label>
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={signUpEmail}
+                        onChange={(e) => setSignUpEmail(e.target.value)}
+                        required
+                        className="bg-secondary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password">Password</Label>
+                      <Input
+                        id="signup-password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={signUpPassword}
+                        onChange={(e) => setSignUpPassword(e.target.value)}
+                        required
+                        className="bg-secondary"
+                      />
+                    </div>
+                    
+                    {/* Role Selection */}
+                    <div className="space-y-3">
+                      <Label>I am a...</Label>
+                      <RadioGroup
+                        value={signUpRole}
+                        onValueChange={(value) => setSignUpRole(value as 'learner' | 'employer')}
+                        className="grid grid-cols-2 gap-4"
+                      >
+                        <div>
+                          <RadioGroupItem
+                            value="learner"
+                            id="learner"
+                            className="peer sr-only"
+                          />
+                          <Label
+                            htmlFor="learner"
+                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-secondary p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                          >
+                            <GraduationCap className="mb-2 h-6 w-6" />
+                            <span className="font-medium">Learner</span>
+                            <span className="text-xs text-muted-foreground text-center mt-1">
+                              Learn & practice coding
+                            </span>
+                          </Label>
+                        </div>
+                        <div>
+                          <RadioGroupItem
+                            value="employer"
+                            id="employer"
+                            className="peer sr-only"
+                          />
+                          <Label
+                            htmlFor="employer"
+                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-secondary p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                          >
+                            <Briefcase className="mb-2 h-6 w-6" />
+                            <span className="font-medium">Employer</span>
+                            <span className="text-xs text-muted-foreground text-center mt-1">
+                              Assess candidates
+                            </span>
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creating account...
+                        </>
+                      ) : (
+                        'Create Account'
+                      )}
+                    </Button>
+                  </form>
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>

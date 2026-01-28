@@ -80,7 +80,7 @@ export default function Index() {
               </span>
               <span className="inline-flex items-center gap-2">
                 <Check className="h-3.5 w-3.5 text-primary" />
-                Built on Supabase
+                Built on Firebase
               </span>
             </div>
           </div>

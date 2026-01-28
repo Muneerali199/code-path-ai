@@ -156,56 +156,59 @@ export default function EnhancedIDELayout() {
 
   // Handle code execution
   const handleExecute = async (code: string, language: string) => {
+    // Firebase Cloud Function URL
+    const functionUrl = 'https://us-central1-codepath-3ea5e.cloudfunctions.net/executeCode'
+    const canRunLocally = ['javascript', 'js'].includes(language.toLowerCase())
+
     setIsExecuting(true)
     setOutput('')
-    
+
+    // Local execution for JavaScript
+    if (canRunLocally) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const logs: string[] = []
+        const originalConsole = { ...console }
+        
+        console.log = (...args) => {
+          logs.push(args.map(arg => String(arg)).join(' '))
+        }
+        
+        const func = new Function(code)
+        func()
+        
+        Object.assign(console, originalConsole)
+        setOutput(logs.join('\n') || 'Code executed successfully (no output)')
+        toast.success('Code executed successfully')
+      } catch (error) {
+        setOutput(`Error: ${error.message}`)
+        toast.error('Execution failed')
+      } finally {
+        setIsExecuting(false)
+      }
+      return
+    }
+
+    // Remote execution for other languages
     try {
-      // Simulate code execution
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ code, language }),
+      })
       
-      let result = ''
+      const data = await response.json()
       
-      switch (language.toLowerCase()) {
-        case 'javascript':
-        case 'js':
-          try {
-            // Simple JavaScript execution simulation
-            const logs: string[] = []
-            const originalConsole = { ...console }
-            
-            console.log = (...args) => {
-              logs.push(args.map(arg => String(arg)).join(' '))
-            }
-            
-            // Create a safe execution context
-            const func = new Function(code)
-            func()
-            
-            // Restore console
-            Object.assign(console, originalConsole)
-            
-            result = logs.join('\\n') || 'Code executed successfully (no output)'
-          } catch (error) {
-            result = `Error: ${error.message}`
-          }
-          break
-          
-        case 'python':
-          result = `Python execution would require a backend service\\nSimulated output:\\n${code.split('\\n').length} lines processed`
-          break
-          
-        case 'typescript':
-          result = `TypeScript compilation required\\nSimulated output:\\n${code.split('\\n').length} lines processed`
-          break
-          
-        default:
-          result = `Execution not implemented for ${language}\\nCode length: ${code.length} characters`
+      if (!response.ok) {
+        throw new Error(data.error || 'Execution failed')
       }
       
-      setOutput(result)
+      setOutput(data.output || 'No output')
       toast.success('Code executed successfully')
     } catch (error) {
-      setOutput(`Error executing code: ${error}`)
+      setOutput(`Error executing code: ${error.message || error}`)
       toast.error('Code execution failed')
     } finally {
       setIsExecuting(false)

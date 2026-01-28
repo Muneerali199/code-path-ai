@@ -23,7 +23,11 @@ import {
   Save,
   Play,
   Copy,
-  Download
+  Download,
+  User,
+  LogOut,
+  HelpCircle,
+  LayoutDashboard
 } from 'lucide-react'
 import { 
   DropdownMenu,
@@ -38,6 +42,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useAuth } from '@/hooks/useAuth'
+import { useNavigate } from 'react-router-dom'
 
 interface Project {
   id: string
@@ -100,6 +107,8 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, previewVisi
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const { user, profile, signOut } = useAuth()
+  const navigate = useNavigate()
 
   const handleSaveProject = () => {
     toast.success('Project saved successfully')
@@ -136,6 +145,12 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, previewVisi
     toast.info('Code formatting functionality would be implemented here')
   }
 
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/auth')
+    toast.success('Logged out successfully')
+  }
+
   return (
     <div className="bg-[#09090b] border-b border-white/10 px-4 py-2">
       <div className="flex items-center justify-between">
@@ -146,7 +161,7 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, previewVisi
               <Code className="w-5 h-5 text-white" />
             </div>
             <div className="hidden md:block">
-              <h1 className="text-lg font-semibold text-white">CodePath AI</h1>
+              <h1 className="text-lg font-semibold text-white">Trae AI</h1>
               <p className="text-xs text-slate-400">Enhanced IDE</p>
             </div>
           </div>
@@ -394,6 +409,69 @@ export default function EnhancedIDEHeader({ project, aiPanelVisible, previewVisi
           <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white hover:bg-slate-700">
             <Settings className="w-4 h-4" />
           </Button>
+
+          {/* User Profile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="ml-2 h-8 w-8 rounded-full">
+                <Avatar className="h-8 w-8 border border-white/10">
+                  <AvatarImage src={profile?.avatar_url || user?.photoURL || undefined} alt={profile?.full_name || user?.displayName || "User"} />
+                  <AvatarFallback className="bg-blue-600 text-white text-xs">
+                    {(profile?.full_name || user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64 bg-slate-800 border-slate-700 text-white p-0" align="end">
+              <div className="p-4 border-b border-slate-700">
+                <div className="flex items-center space-x-3">
+                  <Avatar className="h-10 w-10 border border-white/10">
+                    <AvatarImage src={profile?.avatar_url || user?.photoURL || undefined} alt={profile?.full_name || user?.displayName || "User"} />
+                    <AvatarFallback className="bg-blue-600 text-white text-sm">
+                      {(profile?.full_name || user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col overflow-hidden">
+                    <p className="text-sm font-medium leading-none truncate">{profile?.full_name || user?.displayName || "User"}</p>
+                    <p className="text-xs leading-none text-slate-400 truncate mt-1">{user?.email}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-1">
+                <DropdownMenuItem className="hover:bg-slate-700 focus:bg-slate-700 cursor-pointer py-2.5">
+                  <Palette className="mr-3 h-4 w-4 text-slate-400" />
+                  <span>Theme</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-slate-700 focus:bg-slate-700 cursor-pointer py-2.5">
+                  <Settings className="mr-3 h-4 w-4 text-slate-400" />
+                  <span>Cloud Agent Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-slate-700 focus:bg-slate-700 cursor-pointer py-2.5">
+                  <HelpCircle className="mr-3 h-4 w-4 text-slate-400" />
+                  <span>Documentation</span>
+                </DropdownMenuItem>
+              </div>
+
+              <DropdownMenuSeparator className="bg-slate-700 my-0" />
+              
+              <div className="p-1">
+                <DropdownMenuItem className="hover:bg-slate-700 focus:bg-slate-700 cursor-pointer py-2.5">
+                  <Download className="mr-3 h-4 w-4 text-slate-400" />
+                  <span>Download Trae Windows</span>
+                </DropdownMenuItem>
+              </div>
+
+              <DropdownMenuSeparator className="bg-slate-700 my-0" />
+
+              <div className="p-1">
+                <DropdownMenuItem onClick={handleSignOut} className="hover:bg-slate-700 focus:bg-slate-700 cursor-pointer py-2.5 text-red-400 hover:text-red-300 focus:text-red-300">
+                  <LogOut className="mr-3 h-4 w-4" />
+                  <span>Log Out</span>
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Mobile Menu Toggle */}
           <Button
