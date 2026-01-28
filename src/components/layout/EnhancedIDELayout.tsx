@@ -270,9 +270,9 @@ export default function EnhancedIDELayout() {
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-900 text-white">
+      <div className="flex items-center justify-center h-screen bg-background text-foreground">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p>Loading CodePath AI IDE...</p>
         </div>
       </div>
@@ -280,7 +280,7 @@ export default function EnhancedIDELayout() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#09090b] text-white">
+    <div className="h-screen flex flex-col bg-background text-foreground">
       {/* Header */}
       <EnhancedIDEHeader 
         project={project}

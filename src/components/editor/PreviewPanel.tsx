@@ -81,18 +81,18 @@ export default function PreviewPanel({ files, className }: PreviewPanelProps) {
       </div>
 
       {/* Preview Area */}
-      <div className="flex-1 bg-[#1a1a1c] p-4 flex items-center justify-center overflow-hidden">
+      <div className="flex-1 bg-muted/30 p-4 flex items-center justify-center overflow-hidden">
         <div 
           className={cn(
-            "bg-white transition-all duration-300 shadow-2xl overflow-hidden relative",
+            "bg-background transition-all duration-300 shadow-2xl overflow-hidden relative",
             device === 'mobile' ? "w-[375px] h-[667px] rounded-3xl border-8 border-gray-800" : "w-full h-full rounded-md border border-white/10"
           )}
         >
           {isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#09090b] z-10">
+            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
               <div className="flex flex-col items-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
-                <p className="text-sm text-slate-400">Starting development server...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                <p className="text-sm text-muted-foreground">Starting development server...</p>
               </div>
             </div>
           ) : (
