@@ -57,6 +57,17 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Neural theme colors
+        neural: {
+          bg: "hsl(var(--background))",
+          panel: "hsl(var(--background-panel))",
+          input: "hsl(var(--background-input))",
+          border: "hsl(var(--border-subtle))",
+        },
+        // AI accent colors
+        sage: "hsl(var(--accent-sage))",
+        forge: "hsl(var(--accent-forge))",
+        sync: "hsl(var(--accent-sync))",
         // IDE-specific colors
         editor: {
           DEFAULT: "hsl(var(--editor-bg))",

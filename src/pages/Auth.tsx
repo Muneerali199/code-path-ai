@@ -20,11 +20,7 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getPostAuthRoute = useCallback(() => {
-    try {
-      return localStorage.getItem('currentProject') ? '/app' : '/create-project';
-    } catch {
-      return '/create-project';
-    }
+    return '/dashboard';
   }, []);
   
   // Sign In state

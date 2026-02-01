@@ -2,19 +2,27 @@ import { Controller, Post, Body, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 
-import { IsString, IsOptional, IsObject, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsArray, IsBoolean } from 'class-validator';
 
 export class ChatRequest {
   @IsString()
   message: string;
 
   @IsOptional()
+  @IsArray()
+  messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+
+  @IsOptional()
   @IsString()
-  provider?: 'openai' | 'claude' | 'gemini' | 'local';
+  provider?: 'openai' | 'claude' | 'gemini' | 'local' | 'deepseek' | 'mistral';
 
   @IsOptional()
   @IsString()
   mode?: 'explain' | 'create';
+
+  @IsOptional()
+  @IsBoolean()
+  enableResearch?: boolean;
 
   @IsOptional()
   @IsObject()

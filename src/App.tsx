@@ -1,55 +1,53 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import EnhancedIDELayout from "@/components/layout/EnhancedIDELayout";
-import Auth from "./pages/Auth";
-import CreateProject from "./pages/CreateProject";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import React, { useState } from 'react';
+import { MainLayout } from './components/layout/MainLayout';
+import { SettingsPage } from './pages/SettingsPage';
+import { MCPPage } from './pages/MCPPage';
+import { ModelsPage } from './pages/ModelsPage';
+import { ThemeProvider } from './contexts/ThemeContext';
 
-const queryClient = new QueryClient();
+// Simple router for the editor application
+type Page = 'editor' | 'settings' | 'mcp' | 'models';
 
-const AppRoutes = () => {
-  const { user, loading } = useAuth();
+// Create a simple navigation context
+export const NavigationContext = React.createContext<{
+  currentPage: Page;
+  navigate: (page: Page) => void;
+}>({
+  currentPage: 'editor',
+  navigate: () => {},
+});
 
-  if (loading) {
-    return (
-      <div className="dark min-h-screen flex items-center justify-center bg-background text-foreground">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+function App() {
+  const [currentPage, setCurrentPage] = useState<Page>('editor');
+
+  const navigate = (page: Page) => {
+    setCurrentPage(page);
+  };
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'editor':
+        return <MainLayout />;
+      case 'settings':
+        return <SettingsPage />;
+      case 'mcp':
+        return <MCPPage />;
+      case 'models':
+        return <ModelsPage />;
+      default:
+        return <MainLayout />;
+    }
+  };
 
   return (
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/auth" element={user ? <Navigate to="/create-project" replace /> : <Auth />} />
-      <Route path="/create-project" element={user ? <CreateProject /> : <Navigate to="/auth" replace />} />
-      <Route path="/app" element={user ? <EnhancedIDELayout /> : <Navigate to="/auth" replace />} />
-      {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <ThemeProvider>
+      <NavigationContext.Provider value={{ currentPage, navigate }}>
+        <div className="h-screen w-screen bg-neural-bg text-white overflow-hidden">
+          {renderPage()}
+        </div>
+      </NavigationContext.Provider>
+    </ThemeProvider>
   );
-};
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+}
 
 export default App;

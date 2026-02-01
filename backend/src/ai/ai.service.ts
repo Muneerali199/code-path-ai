@@ -3,19 +3,38 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ResearchService } from './research.service';
 
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private openai: OpenAI;
+  private deepseek: OpenAI;
+  private mistral: OpenAI;
   private claude: Anthropic;
   private gemini: GoogleGenerativeAI;
 
-  constructor(private configService: ConfigService) {
+  constructor(private configService: ConfigService, private researchService: ResearchService) {
     const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (openaiKey) {
       this.openai = new OpenAI({
         apiKey: openaiKey,
+      });
+    }
+
+    const deepseekKey = 'sk-c64faa6806be4d03b6e381a0baaf66cd';
+    if (deepseekKey) {
+      this.deepseek = new OpenAI({
+        apiKey: deepseekKey,
+        baseURL: 'https://api.deepseek.com',
+      });
+    }
+
+    const mistralKey = 'Hcv4RPuQoPjJabuRJ95efQ5f8ekQpmqr';
+    if (mistralKey) {
+      this.mistral = new OpenAI({
+        apiKey: mistralKey,
+        baseURL: 'https://api.mistral.ai/v1',
       });
     }
 
@@ -34,20 +53,43 @@ export class AiService {
 
   async chat(request: {
     message: string;
-    provider?: 'openai' | 'claude' | 'gemini' | 'local';
+    messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+    provider?: 'openai' | 'claude' | 'gemini' | 'local' | 'deepseek' | 'mistral';
     mode?: 'explain' | 'create';
+    enableResearch?: boolean;
     context?: {
       files?: Array<{ path: string; content: string }>;
       activeFile?: string;
+      researchData?: string;
     };
   }) {
-    const provider = request.provider || 'openai';
+    const provider = request.provider || 'mistral';
     const mode = request.mode || 'explain';
 
-    this.logger.log(`Processing chat request with provider: ${provider}, mode: ${mode}`);
+    this.logger.log(`Processing chat request with provider: ${provider}, mode: ${mode}, research: ${request.enableResearch}`);
 
     try {
       let response: string;
+      let researchContext = '';
+
+      if (request.enableResearch || this.isResearchQuery(request.message)) {
+        this.logger.log('Performing research for query...');
+        try {
+          const searchResults = await this.researchService.search(request.message);
+          researchContext = await this.researchService.enrichWithAI(request.message, searchResults.results);
+          this.logger.log(`Research completed with ${searchResults.results.length} results`);
+        } catch (error) {
+          this.logger.warn(`Research failed: ${error.message}`);
+        }
+      }
+
+      const enrichedRequest = {
+        ...request,
+        context: {
+          ...request.context,
+          researchData: researchContext,
+        },
+      };
 
       switch (provider) {
         case 'openai':
@@ -58,6 +100,12 @@ export class AiService {
           break;
         case 'gemini':
           response = await this.chatWithGemini(request, mode);
+          break;
+        case 'deepseek':
+          response = await this.chatWithDeepSeek(request, mode);
+          break;
+        case 'mistral':
+          response = await this.chatWithMistral(enrichedRequest, mode);
           break;
         case 'local':
           response = await this.chatWithLocal(request, mode);
@@ -70,6 +118,7 @@ export class AiService {
         response,
         provider,
         mode,
+        researchPerformed: !!researchContext,
       };
     } catch (error) {
       this.logger.error(`Error processing chat request: ${error.message}`);
@@ -77,12 +126,23 @@ export class AiService {
     }
   }
 
+  private isResearchQuery(message: string): boolean {
+    const researchKeywords = [
+      'research', 'find information', 'search for', 'tell me about', 
+      'what is', 'who is', 'how does', 'explain about',
+      'latest news', 'current', 'updates on', 'information about'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    return researchKeywords.some(keyword => lowerMessage.includes(keyword));
+  }
+
   private async chatWithOpenAI(request: any, mode: string): Promise<string> {
     if (!this.openai) {
       throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in your environment.');
     }
     
-    const systemPrompt = this.getSystemPrompt(mode, request.context);
+    const systemPrompt = this.getSystemPrompt(mode);
     
     const completion = await this.openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
@@ -101,7 +161,7 @@ export class AiService {
       throw new Error('Anthropic API key not configured. Please set ANTHROPIC_API_KEY in your environment.');
     }
     
-    const systemPrompt = this.getSystemPrompt(mode, request.context);
+    const systemPrompt = this.getSystemPrompt(mode);
     
     const message = await this.claude.messages.create({
       model: 'claude-3-5-sonnet-20241022',
@@ -122,7 +182,7 @@ export class AiService {
       throw new Error('Google AI API key not configured. Please set GOOGLE_AI_API_KEY in your environment.');
     }
     
-    const systemPrompt = this.getSystemPrompt(mode, request.context);
+    const systemPrompt = this.getSystemPrompt(mode);
     
     const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-pro' });
     
@@ -135,51 +195,110 @@ export class AiService {
     return result.response.text() || 'No response from Gemini';
   }
 
-  private async chatWithLocal(request: any, mode: string): Promise<string> {
-    // Placeholder for local LLM integration
-    // You can integrate Ollama, LM Studio, or other local models here
-    return 'Local AI model integration not implemented yet. Please configure an AI provider.';
+  private async chatWithDeepSeek(request: any, mode: string): Promise<string> {
+    if (!this.deepseek) {
+      throw new Error('DeepSeek API key not configured.');
+    }
+    
+    const systemPrompt = this.getSystemPrompt(mode);
+    const messages = request.messages || [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: request.message },
+    ];
+    
+    if (request.messages && !messages.find(m => m.role === 'system')) {
+      messages.unshift({ role: 'system', content: systemPrompt });
+    }
+
+    const completion = await this.deepseek.chat.completions.create({
+      model: 'deepseek-chat',
+      messages,
+      stream: false,
+    });
+
+    return completion.choices[0]?.message?.content || 'No response from DeepSeek';
   }
 
-  private getSystemPrompt(mode: string, context?: any): string {
-    const basePrompt = `You are CodePath AI Coach, an expert programming assistant. 
-You help users understand code, debug issues, and build applications.
+  private async chatWithMistral(request: any, mode: string): Promise<string> {
+    if (!this.mistral) {
+      throw new Error('Mistral API key not configured.');
+    }
+    
+    const systemPrompt = this.getSystemPrompt(mode);
+    
+    let messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+    
+    messages.push({ role: 'system', content: systemPrompt });
+    
+    if (request.messages && Array.isArray(request.messages)) {
+      for (const msg of request.messages) {
+        let role: 'user' | 'assistant' | 'system' = 'user';
+        if (msg.role === 'assistant' || msg.role === 'sage' || msg.role === 'forge') {
+          role = 'assistant';
+        } else if (msg.role === 'system') {
+          role = 'system';
+        }
+        
+        if (msg.content) {
+          messages.push({ role, content: msg.content });
+        }
+      }
+    }
+    
+    let userMessage = request.message;
+    if (request.context?.researchData) {
+      userMessage = `Web Research:\n${request.context.researchData}\n\nQuestion: ${request.message}`;
+    }
+    messages.push({ role: 'user', content: userMessage });
+    
+    const systemMessages = messages.filter(m => m.role === 'system');
+    if (systemMessages.length > 1) {
+      messages = messages.filter((m, idx) => {
+        if (m.role === 'system' && idx > 0) return false;
+        return true;
+      });
+    }
 
-Current context:
-${context?.files ? `Files in workspace:\n${context.files.map(f => `- ${f.path}`).join('\n')}` : ''}
-${context?.activeFile ? `Active file: ${context.activeFile}` : ''}`;
+    try {
+      this.logger.debug(`[Mistral] Sending ${messages.length} messages, mode: ${mode}`);
+      
+      const completion = await this.mistral.chat.completions.create({
+        model: 'mistral-large-latest',
+        messages: messages as any,
+        max_tokens: 4096,
+        temperature: 0.7,
+      });
 
+      const response = completion.choices[0]?.message?.content;
+      if (!response) {
+        this.logger.error('[Mistral] Empty response from API');
+        return 'No response from Mistral';
+      }
+      
+      return response;
+    } catch (error: any) {
+      this.logger.error(`[Mistral] Error: ${error.message}`);
+      this.logger.error(`[Mistral] Status: ${error.status}`);
+      throw error;
+    }
+  }
+
+  private async chatWithLocal(request: any, mode: string): Promise<string> {
+    return 'Local AI model integration not implemented yet.';
+  }
+
+  private getSystemPrompt(mode: string): string {
     if (mode === 'explain') {
-      return `${basePrompt}
-
-Your role is to EXPLAIN code concepts, patterns, and architecture.
-Focus on:
-- Clear explanations of what the code does
-- Why certain patterns are used
-- Best practices and potential improvements
-- Breaking down complex concepts into simple terms
-
-Be educational and thorough in your explanations.`;
+      return `You are CodePath AI, a programming expert. Provide clear, well-structured explanations using markdown. Use headers, code blocks, and examples to illustrate concepts. Explain both the what and why behind solutions.`;
+    } else if (mode === 'create') {
+      return `You are CodePath Forge, an expert code generation assistant. Generate clean, production-ready code with clear comments. Explain your implementation decisions and provide usage examples.`;
     }
-
-    if (mode === 'create') {
-      return `${basePrompt}
-
-Your role is to CREATE new code, features, or applications.
-Focus on:
-- Writing clean, production-ready code
-- Following best practices and conventions
-- Providing complete, working solutions
-- Including necessary imports and setup
-
-Be practical and provide actionable code solutions.`;
-    }
-
-    return basePrompt;
+    
+    return `You are CodePath AI, a helpful programming assistant. Provide thoughtful responses with code examples.`;
   }
 
   getAvailableProviders(): string[] {
-    return ['openai', 'claude', 'gemini', 'local'];
+    return ['openai', 'claude', 'gemini', 'deepseek', 'mistral', 'local'];
   }
 
   getModelsForProvider(provider: string): string[] {
@@ -187,6 +306,8 @@ Be practical and provide actionable code solutions.`;
       openai: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo'],
       claude: ['claude-3-5-sonnet-20241022', 'claude-3-haiku-20240307'],
       gemini: ['gemini-1.5-pro', 'gemini-1.5-flash'],
+      deepseek: ['deepseek-chat', 'deepseek-coder'],
+      mistral: ['mistral-tiny', 'mistral-small', 'mistral-medium', 'mistral-large-latest'],
       local: ['custom-model'],
     };
 

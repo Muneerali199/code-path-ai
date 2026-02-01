@@ -1,161 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* CodePath AI - Dark IDE Theme Design System
-   All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    /* Light theme - rarely used, keeping for compatibility */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 142 76% 36%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 142 76% 36%;
-    --radius: 0.5rem;
-
-    /* Sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 142 76% 36%;
-
-    /* IDE-specific tokens */
-    --editor-bg: 220 13% 18%;
-    --editor-gutter: 220 13% 14%;
-    --editor-line-highlight: 220 13% 22%;
-    --terminal-bg: 220 16% 12%;
-    --panel-bg: 220 14% 10%;
-    --panel-header: 220 13% 14%;
-
-    /* Syntax highlighting */
-    --syntax-keyword: 207 82% 66%;
-    --syntax-string: 95 38% 62%;
-    --syntax-function: 39 67% 69%;
-    --syntax-variable: 187 47% 55%;
-    --syntax-comment: 220 10% 50%;
-    --syntax-number: 29 54% 61%;
-
-    /* Status colors */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
-    --info: 207 82% 66%;
-    --info-foreground: 0 0% 100%;
-  }
-
-  .dark {
-    /* Dark IDE theme - primary theme */
-    --background: 220 18% 4%;
-    --foreground: 220 13% 92%;
-
-    --card: 220 18% 7%;
-    --card-foreground: 220 13% 91%;
-
-    --popover: 220 18% 7%;
-    --popover-foreground: 220 13% 91%;
-
-    --primary: 142 76% 42%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 16% 12%;
-    --secondary-foreground: 220 13% 91%;
-
-    --muted: 220 16% 12%;
-    --muted-foreground: 220 9% 55%;
-
-    --accent: 220 16% 16%;
-    --accent-foreground: 220 13% 91%;
-
-    --destructive: 0 62% 50%;
+    /* Neural Dark Theme */
+    --background: 160 20% 4%;
+    --background-panel: 160 15% 7%;
+    --background-input: 160 12% 10%;
+    
+    --foreground: 0 0% 100%;
+    --foreground-secondary: 215 20% 65%;
+    --foreground-muted: 215 16% 47%;
+    
+    /* Accent Colors */
+    --accent-sage: 195 100% 50%;
+    --accent-forge: 155 100% 50%;
+    --accent-sync: 270 70% 60%;
+    --accent-warn: 20 100% 60%;
+    
+    --border-subtle: 215 28% 17%;
+    --border-active: 155 100% 50%;
+    
+    --primary: 155 100% 50%;
+    --primary-foreground: 160 20% 4%;
+    --secondary: 160 15% 12%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 160 12% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 195 100% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-
-    --border: 220 14% 14%;
-    --input: 220 14% 14%;
-    --ring: 142 76% 42%;
-
-    /* Sidebar - darker for contrast */
-    --sidebar-background: 220 20% 3%;
-    --sidebar-foreground: 220 13% 85%;
-    --sidebar-primary: 142 76% 42%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 16% 10%;
-    --sidebar-accent-foreground: 220 13% 91%;
-    --sidebar-border: 220 14% 10%;
-    --sidebar-ring: 142 76% 42%;
-
-    /* IDE-specific tokens */
-    --editor-bg: 220 16% 8%;
-    --editor-gutter: 220 18% 5%;
-    --editor-line-highlight: 220 16% 12%;
-    --terminal-bg: 220 20% 3.5%;
-    --panel-bg: 220 18% 5%;
-    --panel-header: 220 18% 6.5%;
-
-    /* VS Code Dark+ Theme Colors */
-    --vscode-editor-bg: 220 16% 12%; /* #1E1E1E */
-    --vscode-editor-fg: 220 13% 84%; /* #D4D4D4 */
-    --vscode-line-number: 220 8% 52%; /* #858585 */
-    --vscode-selection: 220 64% 31%; /* #264F78 */
-    --vscode-comment: 120 25% 54%; /* #6A9955 */
-    --vscode-keyword: 280 35% 66%; /* #C586C0 */
-    --vscode-string: 15 78% 66%; /* #CE9178 */
-    --vscode-function: 50 67% 69%; /* #DCDCAA */
-    --vscode-variable: 200 60% 62%; /* #9CDCFE */
-    --vscode-type: 180 45% 62%; /* #4EC9B0 */
-    --vscode-number: 100 35% 66%; /* #B5CEA8 */
-    --vscode-operator: 220 13% 84%; /* #D4D4D4 */
-    --vscode-bracket-match: 120 100% 25%; /* #006400 */
-    --vscode-gutter-bg: 220 16% 12%; /* #1E1E1E */
-    --vscode-widget-bg: 220 15% 19%; /* #2D2D30 */
-    --vscode-status-bar: 210 100% 48%; /* #007ACC */
-    --vscode-activity-bar: 220 18% 15%; /* #2D2D30 */
-    --vscode-side-bar: 220 18% 15%; /* #252526 */
-    --vscode-tab-active: 220 16% 12%; /* #1E1E1E */
-    --vscode-tab-inactive: 220 15% 18%; /* #2D2D30 */
-
-    /* Enhanced AI colors */
-    --ai-explain: 280 76% 66%; /* Purple for explanation */
-    --ai-generate: 210 82% 66%; /* Blue for generation */
-    --ai-suggestion: 45 92% 58%; /* Yellow for suggestions */
-    --ai-error: 0 84% 60%; /* Red for errors */
-
-    /* Syntax highlighting - vibrant colors for dark bg */
-    --syntax-keyword: 207 82% 66%;
-    --syntax-string: 95 38% 62%;
-    --syntax-function: 39 67% 69%;
-    --syntax-variable: 187 47% 55%;
-    --syntax-comment: 220 10% 45%;
-    --syntax-number: 29 54% 61%;
-
-    /* Status colors */
-    --success: 142 76% 42%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
-    --info: 207 82% 66%;
-    --info-foreground: 0 0% 100%;
+    --border: 215 28% 17%;
+    --input: 160 12% 10%;
+    --ring: 155 100% 50%;
+    --radius: 0.5rem;
   }
 }
 
@@ -163,176 +45,317 @@
   * {
     @apply border-border;
   }
-
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
   }
-
-  /* Scrollbar styling for IDE feel */
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--muted-foreground) / 0.3);
-    border-radius: 5px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+  
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
 }
 
-/* IDE-specific utility classes */
-@layer components {
-  .editor-panel {
-    background: hsl(var(--editor-bg));
-  }
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-  .terminal-panel {
-    background: hsl(var(--terminal-bg));
-  }
+::-webkit-scrollbar-track {
+  background: hsl(var(--background-panel));
+}
 
-  .panel-header {
-    background: hsl(var(--panel-header));
-  }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-subtle));
+  border-radius: 4px;
+}
 
-  .gutter {
-    background: hsl(var(--editor-gutter));
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--accent-forge) / 0.5);
+}
 
-  .line-highlight {
-    background: hsl(var(--editor-line-highlight));
-  }
+/* Scrollbar for panels */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
 
-  /* VS Code Dark+ specific classes */
-  .vscode-editor-bg {
-    background: hsl(var(--vscode-editor-bg));
-  }
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  .vscode-editor-fg {
-    color: hsl(var(--vscode-editor-fg));
-  }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-subtle));
+  border-radius: 2px;
+}
 
-  .vscode-line-number {
-    color: hsl(var(--vscode-line-number));
-  }
+/* Neural Glow Effects */
+.glow-sage {
+  box-shadow: 0 0 20px hsl(var(--accent-sage) / 0.3),
+              0 0 40px hsl(var(--accent-sage) / 0.1);
+}
 
-  .vscode-selection {
-    background: hsl(var(--vscode-selection));
-  }
+.glow-forge {
+  box-shadow: 0 0 20px hsl(var(--accent-forge) / 0.3),
+              0 0 40px hsl(var(--accent-forge) / 0.1);
+}
 
-  .vscode-comment {
-    color: hsl(var(--vscode-comment));
-  }
+.glow-sync {
+  box-shadow: 0 0 20px hsl(var(--accent-sync) / 0.3),
+              0 0 40px hsl(var(--accent-sync) / 0.1);
+}
 
-  .vscode-keyword {
-    color: hsl(var(--vscode-keyword));
-  }
+/* Text Glow */
+.text-glow-sage {
+  text-shadow: 0 0 10px hsl(var(--accent-sage) / 0.5);
+}
 
-  .vscode-string {
-    color: hsl(var(--vscode-string));
-  }
+.text-glow-forge {
+  text-shadow: 0 0 10px hsl(var(--accent-forge) / 0.5);
+}
 
-  .vscode-function {
-    color: hsl(var(--vscode-function));
-  }
+/* Glass Morphism */
+.glass {
+  background: hsl(var(--background-panel) / 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid hsl(var(--border-subtle));
+}
 
-  .vscode-variable {
-    color: hsl(var(--vscode-variable));
-  }
+.glass-strong {
+  background: hsl(var(--background-panel) / 0.95);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid hsl(var(--border-subtle));
+}
 
-  .vscode-type {
-    color: hsl(var(--vscode-type));
-  }
+/* Panel Styles */
+.panel {
+  background: hsl(var(--background-panel));
+  border: 1px solid hsl(var(--border-subtle));
+}
 
-  .vscode-number {
-    color: hsl(var(--vscode-number));
-  }
+.panel-hover:hover {
+  border-color: hsl(var(--border-active) / 0.3);
+}
 
-  .vscode-operator {
-    color: hsl(var(--vscode-operator));
-  }
+/* Active Line in Editor */
+.active-line {
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    hsl(var(--accent-forge) / 0.05) 5%,
+    hsl(var(--accent-forge) / 0.08) 50%,
+    hsl(var(--accent-forge) / 0.05) 95%,
+    transparent 100%
+  );
+  border-left: 2px solid hsl(var(--accent-forge));
+}
 
-  .vscode-status-bar {
-    background: hsl(var(--vscode-status-bar));
-  }
+/* AI Thinking Animation */
+@keyframes thinking {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
 
-  .vscode-side-bar {
-    background: hsl(var(--vscode-side-bar));
-  }
+.ai-thinking {
+  animation: thinking 1.5s ease-in-out infinite;
+}
 
-  .vscode-tab-active {
-    background: hsl(var(--vscode-tab-active));
+/* Pulse Glow */
+@keyframes pulse-glow {
+  0%, 100% { 
+    box-shadow: 0 0 10px hsl(var(--accent-forge) / 0.3);
   }
+  50% { 
+    box-shadow: 0 0 25px hsl(var(--accent-forge) / 0.6);
+  }
+}
 
-  .vscode-tab-inactive {
-    background: hsl(var(--vscode-tab-inactive));
-  }
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
 
-  /* AI-specific colors */
-  .ai-explain {
-    color: hsl(var(--ai-explain));
+/* Sync Pulse */
+@keyframes sync-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 5px hsl(var(--accent-sync) / 0.5);
   }
+  50% { 
+    box-shadow: 0 0 20px hsl(var(--accent-sync) / 0.8),
+                0 0 40px hsl(var(--accent-sync) / 0.4);
+  }
+}
 
-  .ai-generate {
-    color: hsl(var(--ai-generate));
-  }
+.sync-pulse {
+  animation: sync-pulse 1.5s ease-in-out infinite;
+}
 
-  .ai-suggestion {
-    color: hsl(var(--ai-suggestion));
-  }
+/* Typing Cursor */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
-  .ai-error {
-    color: hsl(var(--ai-error));
-  }
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
 
-  /* Enhanced scrollbar for IDE */
-  .ide-scrollbar::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+/* Code Syntax Colors */
+.syntax-keyword { color: #c792ea; }
+.syntax-string { color: #c3e88d; }
+.syntax-function { color: #82aaff; }
+.syntax-comment { color: #676e95; }
+.syntax-number { color: #f78c6c; }
+.syntax-operator { color: #89ddff; }
+.syntax-variable { color: #ff5370; }
+.syntax-type { color: #ffcb6b; }
 
-  .ide-scrollbar::-webkit-scrollbar-track {
-    background: hsl(var(--vscode-editor-bg));
-  }
+/* Complexity Heat Map */
+.code-simple { 
+  border-left: 2px solid hsl(var(--accent-forge));
+}
+.code-moderate { 
+  border-left: 2px solid #fbbf24;
+}
+.code-complex { 
+  border-left: 2px solid #f87171;
+}
 
-  .ide-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(var(--vscode-line-number) / 0.6);
-    border-radius: 4px;
+/* Animations */
+@keyframes slideIn {
+  from { 
+    opacity: 0; 
+    transform: translateX(-10px); 
   }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
 
-  .ide-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--vscode-line-number) / 0.8);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
-  /* Code syntax classes */
-  .syntax-keyword {
-    color: hsl(var(--syntax-keyword));
+@keyframes scaleIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95); 
   }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
 
-  .syntax-string {
-    color: hsl(var(--syntax-string));
-  }
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
 
-  .syntax-function {
-    color: hsl(var(--syntax-function));
-  }
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
 
-  .syntax-variable {
-    color: hsl(var(--syntax-variable));
-  }
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out;
+}
 
-  .syntax-comment {
-    color: hsl(var(--syntax-comment));
-  }
+/* Resizer */
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s;
+}
 
-  .syntax-number {
-    color: hsl(var(--syntax-number));
-  }
+.resizer:hover {
+  background: hsl(var(--accent-forge) / 0.5);
+}
+
+/* Tab Styles */
+.tab {
+  @apply px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors border-b-2 border-transparent;
+}
+
+.tab-active {
+  @apply text-white border-forge;
+}
+
+/* Button Variants */
+.btn-sage {
+  @apply bg-cyan-400/10 text-cyan-400 hover:bg-cyan-400/20 border border-cyan-400/30;
+}
+
+.btn-forge {
+  @apply bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20 border border-emerald-400/30;
+}
+
+/* Status Indicators */
+.status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-online {
+  @apply bg-emerald-500;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.status-thinking {
+  @apply bg-cyan-400;
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+.status-syncing {
+  @apply bg-purple-500;
+  animation: sync-pulse 1s ease-in-out infinite;
+}
+
+/* Selection */
+::selection {
+  background: hsl(var(--accent-forge) / 0.3);
+  color: white;
+}
+
+/* Focus Ring */
+.focus-ring:focus {
+  outline: none;
+  ring: 2px;
+  ring-color: hsl(var(--accent-forge));
+  ring-offset: 2px;
+  ring-offset-color: hsl(var(--background));
+}
+
+/* Tooltip */
+.tooltip {
+  @apply absolute px-2 py-1 text-xs bg-neural-panel border border-neural-border rounded shadow-lg;
+}
+
+/* Loading Skeleton */
+.skeleton {
+  @apply bg-gray-500/20 rounded animate-pulse;
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #00d4ff 0%, #00ff9d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Noise Texture */
+.noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.02;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
