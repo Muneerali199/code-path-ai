@@ -1,22 +1,32 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp } from 'firebase/app';
+import { getAnalytics } from 'firebase/analytics';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
-// Your web app's Firebase configuration
+// Use Vite env variables (prefixed with VITE_) for client-side runtime
 const firebaseConfig = {
-  apiKey: "AIzaSyBBNgCWYR2CBsxqFH9b2FEa9-1zMCQv1s8",
-  authDomain: "codepath-3ea5e.firebaseapp.com",
-  projectId: "codepath-3ea5e",
-  storageBucket: "codepath-3ea5e.firebasestorage.app",
-  messagingSenderId: "342695932241",
-  appId: "1:342695932241:web:8f7e60f0e92b786470a370",
-  measurementId: "G-K9L77YFQY2"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Initialize Firebase safely (analytics may fail in some environments)
+const app = initializeApp(firebaseConfig as any);
+let analytics: ReturnType<typeof getAnalytics> | null = null;
+try {
+  // Only attempt analytics when measurement id is provided
+  if (firebaseConfig.measurementId) {
+    analytics = getAnalytics(app);
+  }
+} catch (e) {
+  // Ignore analytics errors in non-browser environments
+  analytics = null;
+}
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 

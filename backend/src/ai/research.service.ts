@@ -1,15 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { You } from '@youdotcom-oss/sdk';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ResearchService {
   private readonly logger = new Logger(ResearchService.name);
-  private readonly apiKey = 'ydc-sk-28678f2ee7ed9ef4-D1Zgvnxbfz33vYLeVfzQMDC5WKS4p552-9d42cf09';
   private you: You;
 
-  constructor() {
+  constructor(private configService: ConfigService) {
+    const apiKey = this.configService.get<string>('RESEARCH_API_KEY') || process.env.RESEARCH_API_KEY;
+    if (!apiKey) {
+      this.logger.warn('RESEARCH_API_KEY is not configured. Research features will be disabled.');
+      // Initialize You without auth to avoid runtime errors; methods should guard accordingly.
+      this.you = new You();
+      return;
+    }
+
     this.you = new You({
-      apiKeyAuth: this.apiKey,
+      apiKeyAuth: apiKey,
     });
   }
 

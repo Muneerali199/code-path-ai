@@ -22,7 +22,7 @@ export class AiService {
       });
     }
 
-    const deepseekKey = 'sk-c64faa6806be4d03b6e381a0baaf66cd';
+    const deepseekKey = this.configService.get<string>('DEEPSEEK_API_KEY') || process.env.DEEPSEEK_API_KEY;
     if (deepseekKey) {
       this.deepseek = new OpenAI({
         apiKey: deepseekKey,
@@ -30,7 +30,7 @@ export class AiService {
       });
     }
 
-    const mistralKey = 'Hcv4RPuQoPjJabuRJ95efQ5f8ekQpmqr';
+    const mistralKey = this.configService.get<string>('MISTRAL_API_KEY') || process.env.MISTRAL_API_KEY;
     if (mistralKey) {
       this.mistral = new OpenAI({
         apiKey: mistralKey,
