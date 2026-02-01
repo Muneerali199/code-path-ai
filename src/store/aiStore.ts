@@ -276,7 +276,6 @@ export const useAIStore = create<AIState>((set, get) => ({
     }
   },
   
-  setSageStatus: (status) => set({ sageStatus: status }),
   setCollaborationMode: (active) => set({ collaborationMode: active }),
   
   setContext: (context) => set({
