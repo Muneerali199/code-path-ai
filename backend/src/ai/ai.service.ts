@@ -139,6 +139,10 @@ export class AiService {
 
   private async chatWithOpenAI(request: any, mode: string): Promise<string> {
     if (!this.openai) {
+      // In development, provide a mock response if API key is not configured
+      if (process.env.NODE_ENV !== 'production') {
+        return `This is a simulated response from OpenAI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your OpenAI API key.`;
+      }
       throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY in your environment.');
     }
     
@@ -158,6 +162,10 @@ export class AiService {
 
   private async chatWithClaude(request: any, mode: string): Promise<string> {
     if (!this.claude) {
+      // In development, provide a mock response if API key is not configured
+      if (process.env.NODE_ENV !== 'production') {
+        return `This is a simulated response from Claude AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Anthropic API key.`;
+      }
       throw new Error('Anthropic API key not configured. Please set ANTHROPIC_API_KEY in your environment.');
     }
     
@@ -179,6 +187,10 @@ export class AiService {
 
   private async chatWithGemini(request: any, mode: string): Promise<string> {
     if (!this.gemini) {
+      // In development, provide a mock response if API key is not configured
+      if (process.env.NODE_ENV !== 'production') {
+        return `This is a simulated response from Google Gemini AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Google AI API key.`;
+      }
       throw new Error('Google AI API key not configured. Please set GOOGLE_AI_API_KEY in your environment.');
     }
     
@@ -197,6 +209,10 @@ export class AiService {
 
   private async chatWithDeepSeek(request: any, mode: string): Promise<string> {
     if (!this.deepseek) {
+      // In development, provide a mock response if API key is not configured
+      if (process.env.NODE_ENV !== 'production') {
+        return `This is a simulated response from DeepSeek AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your DeepSeek API key.`;
+      }
       throw new Error('DeepSeek API key not configured.');
     }
     
@@ -221,7 +237,11 @@ export class AiService {
 
   private async chatWithMistral(request: any, mode: string): Promise<string> {
     if (!this.mistral) {
-      throw new Error('Mistral API key not configured.');
+      // In development, provide a mock response if API key is not configured
+      if (process.env.NODE_ENV !== 'production') {
+        return `This is a simulated response from Mistral AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Mistral API key.`;
+      }
+      throw new Error('Mistral API key not configured. Please set MISTRAL_API_KEY in your environment.');
     }
     
     const systemPrompt = this.getSystemPrompt(mode);

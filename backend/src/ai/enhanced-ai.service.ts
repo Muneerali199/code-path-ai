@@ -421,6 +421,10 @@ Include appropriate assertions and mock objects if needed. Make sure the tests a
       switch (provider) {
         case 'openai':
           if (!this.openai) {
+            // In development, provide a mock response if API key is not configured
+            if (process.env.NODE_ENV !== 'production') {
+              return `This is a simulated response from OpenAI.\n\nPrompt: ${prompt}\n\nFor a real response, please configure your OpenAI API key.`;
+            }
             throw new Error('OpenAI API key not configured');
           }
           
@@ -438,6 +442,10 @@ Include appropriate assertions and mock objects if needed. Make sure the tests a
 
         case 'claude':
           if (!this.claude) {
+            // In development, provide a mock response if API key is not configured
+            if (process.env.NODE_ENV !== 'production') {
+              return `This is a simulated response from Claude AI.\n\nPrompt: ${prompt}\n\nFor a real response, please configure your Anthropic API key.`;
+            }
             throw new Error('Claude API key not configured');
           }
           
@@ -457,12 +465,16 @@ Include appropriate assertions and mock objects if needed. Make sure the tests a
 
         case 'gemini':
           if (!this.gemini) {
+            // In development, provide a mock response if API key is not configured
+            if (process.env.NODE_ENV !== 'production') {
+              return `This is a simulated response from Google Gemini AI.\n\nPrompt: ${prompt}\n\nFor a real response, please configure your Google AI key.`;
+            }
             throw new Error('Gemini API key not configured');
           }
-          
+
           const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-pro' });
           const result = await model.generateContent(prompt);
-          
+
           return result.response.text() || 'No response from Gemini';
 
         default:

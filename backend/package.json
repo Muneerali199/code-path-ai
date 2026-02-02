@@ -34,6 +34,7 @@
     "@nestjs/websockets": "^11.0.1",
     "@studio-freight/lenis": "^1.0.42",
     "@supabase/supabase-js": "^2.90.1",
+    "@types/uuid": "^10.0.0",
     "@youdotcom-oss/sdk": "^0.10.21",
     "axios": "^1.7.7",
     "bcrypt": "^6.0.0",
@@ -45,7 +46,8 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

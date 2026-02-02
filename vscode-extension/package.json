@@ -1,0 +1,113 @@
+{
+  "name": "codepath-ai",
+  "displayName": "CodePath AI Coach",
+  "description": "AI-powered coding assistant with dual-model architecture",
+  "publisher": "codepath",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:codepath-ai.explainCode",
+    "onCommand:codepath-ai.generateCode",
+    "onCommand:codepath-ai.debugCode",
+    "onCommand:codepath-ai.analyzeCode",
+    "onCommand:codepath-ai.refactorCode"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codepath-ai.explainCode",
+        "title": "CodePath: Explain Selected Code"
+      },
+      {
+        "command": "codepath-ai.generateCode",
+        "title": "CodePath: Generate Code"
+      },
+      {
+        "command": "codepath-ai.debugCode",
+        "title": "CodePath: Debug Code"
+      },
+      {
+        "command": "codepath-ai.analyzeCode",
+        "title": "CodePath: Analyze Code"
+      },
+      {
+        "command": "codepath-ai.refactorCode",
+        "title": "CodePath: Refactor Code"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codepath-ai.explainCode",
+          "when": "editorHasSelection",
+          "group": "codepath-ai@1"
+        },
+        {
+          "command": "codepath-ai.debugCode",
+          "when": "editorHasSelection",
+          "group": "codepath-ai@2"
+        },
+        {
+          "command": "codepath-ai.analyzeCode",
+          "when": "editorHasSelection",
+          "group": "codepath-ai@3"
+        },
+        {
+          "command": "codepath-ai.refactorCode",
+          "when": "editorHasSelection",
+          "group": "codepath-ai@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodePath AI",
+      "properties": {
+        "codepath-ai.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:3001",
+          "description": "URL of the CodePath backend service"
+        },
+        "codepath-ai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for authenticating with the CodePath backend"
+        },
+        "codepath-ai.userId": {
+          "type": "string",
+          "default": "",
+          "description": "User ID for tracking usage (optional)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "chai": "^6.2.2",
+    "eslint": "^8.28.0",
+    "glob": "^13.0.0",
+    "mocha": "^11.7.5",
+    "typescript": "^4.9.4"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}
