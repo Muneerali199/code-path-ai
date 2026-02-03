@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Source files (since we're including compiled output)
+src/
+
+# Git
+.git/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Configuration files that aren't needed at runtime
+tsconfig.json
+.eslintrc.json
+package-lock.json
+
+# Test files
+test-integration.js
+*.test.ts
+*.spec.ts
+
+# VS Code development files (not needed in extension)
+.vscode/

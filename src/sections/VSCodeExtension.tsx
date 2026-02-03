@@ -187,11 +187,16 @@ export const VSCodeExtension = () => {
               </p>
 
               {/* Install Button */}
-              <button className="relative w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-display font-semibold flex items-center justify-center gap-2 transition-all duration-300 group">
+              <a
+                href="https://marketplace.visualstudio.com/items?itemName=codepath.codepath-ai#review-details"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative w-full py-4 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-display font-semibold flex items-center justify-center gap-2 transition-all duration-300 group"
+              >
                 <Download className="w-5 h-5" />
                 Install in VS Code
                 <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
+              </a>
 
               {/* Stats Row */}
               <div className="relative mt-6 pt-6 border-t border-gray-800 grid grid-cols-3 gap-4">

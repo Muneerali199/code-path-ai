@@ -58,7 +58,7 @@ The extension follows a dual-model architecture:
 
 The extension can be configured through VSCode settings:
 
-- `codepath-ai.backendUrl`: URL of the CodePath backend service (default: `http://localhost:3000`)
+- `codepath-ai.backendUrl`: URL of the CodePath backend service (default: `http://localhost:3001`)
 - `codepath-ai.apiKey`: API key for authenticating with the backend
 - `codepath-ai.userApiKey`: Optional provider API key (fallback if Secret Storage isn't available)
 - `codepath-ai.model`: Selected AI model ID
@@ -122,7 +122,14 @@ Alternatively, you can add these to your `settings.json`:
 
 1. Open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
 2. Run "CodePath: Select Model"
-3. Choose from trending models or China-based models
+3. Choose a model from the list (the backend catalog is used when available)
+
+### Settings Model Dropdown
+
+You can also pick a model/provider directly in Settings via dropdowns:
+
+- `codepath-ai.model`: choose a model ID (e.g., `gpt-4o`, `claude-3.5-sonnet`, `mistral-large`, `gemini-1.5-pro`)
+- `codepath-ai.provider`: choose a provider (e.g., `openai`, `anthropic`, `mistral`, `google`)
 
 ### User API Key
 
@@ -174,4 +181,4 @@ For support, please check the main CodePath repository or contact the developmen
 ---
 
 **Version**: 0.0.1  
-**Last Updated**: February 2026
+**Last Updated**: February 3, 2026
