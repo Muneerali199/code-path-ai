@@ -8,6 +8,14 @@ export interface ModelRoute {
   complexity: 'simple' | 'complex';
   priority: number;
   provider: string;
+  model?: string;
+}
+
+export interface ModelCatalogEntry {
+  id: string;
+  label: string;
+  provider: string;
+  category: 'trending' | 'china' | 'other';
 }
 
 @Injectable()
@@ -80,7 +88,7 @@ export class VscodeAiService {
    * Determines which model to use based on the request characteristics
    */
   private determineModelRoute(request: VscodeRequestDto): ModelRoute {
-    const { action, code, message } = request;
+    const { action, code, message, provider: requestedProvider, model: requestedModel } = request;
 
     // Determine complexity based on request characteristics
     let complexity: 'simple' | 'complex' = 'simple';
@@ -139,13 +147,18 @@ export class VscodeAiService {
         break;
     }
 
+    if (requestedProvider) {
+      provider = requestedProvider;
+    }
+
     this.logger.log(`Routing request to ${provider} model (complexity: ${complexity})`);
 
     return {
       action,
       complexity,
       priority: complexity === 'complex' ? 2 : 1,
-      provider
+      provider,
+      model: requestedModel
     };
   }
 
@@ -166,6 +179,8 @@ export class VscodeAiService {
       const response = await this.aiService.chat({
         message: `Explain the following ${request.language || 'code'}:\n\n${request.code}`,
         provider: modelRoute.provider as any,
+        model: modelRoute.model,
+        apiKey: request.userApiKey,
         mode: 'explain'
       });
 
@@ -198,6 +213,8 @@ export class VscodeAiService {
       const response = await this.aiService.chat({
         message: `Generate ${request.language || 'JavaScript'} code based on this description: ${request.message}`,
         provider: modelRoute.provider as any,
+        model: modelRoute.model,
+        apiKey: request.userApiKey,
         mode: 'create',
         context: {
           files: request.context ? [{ path: request.context.fileName || 'unknown', content: request.code || '' }] : []
@@ -233,6 +250,8 @@ export class VscodeAiService {
       const response = await this.aiService.chat({
         message: fullMessage,
         provider: modelRoute.provider as any,
+        model: modelRoute.model,
+        apiKey: request.userApiKey,
         mode: 'explain'
       });
 
@@ -281,7 +300,9 @@ export class VscodeAiService {
     // For refactoring, we'll use the enhanced service with Claude for best results
     const response = await this.aiService.chat({
       message: `Refactor the following ${request.language || 'code'} to improve readability, performance, and maintainability:\n\n${request.code}`,
-      provider: 'claude', // Always use Claude for refactoring
+      provider: modelRoute.provider as any,
+      model: modelRoute.model,
+      apiKey: request.userApiKey,
       mode: 'create'
     });
 
@@ -313,6 +334,8 @@ export class VscodeAiService {
       const response = await this.aiService.chat({
         message: `Create ${request.language || 'JavaScript'} code based on this: ${request.message}`,
         provider: modelRoute.provider as any,
+        model: modelRoute.model,
+        apiKey: request.userApiKey,
         mode: 'create'
       });
 
@@ -321,5 +344,20 @@ export class VscodeAiService {
         language: request.language
       };
     }
+  }
+
+  getModelCatalog(): ModelCatalogEntry[] {
+    return [
+      { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', category: 'trending' },
+      { id: 'gpt-4.1', label: 'GPT-4.1', provider: 'openai', category: 'trending' },
+      { id: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', provider: 'anthropic', category: 'trending' },
+      { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'google', category: 'trending' },
+      { id: 'mistral-large', label: 'Mistral Large', provider: 'mistral', category: 'trending' },
+      { id: 'qwen2.5-72b-instruct', label: 'Qwen 2.5 72B Instruct', provider: 'qwen', category: 'china' },
+      { id: 'deepseek-r1', label: 'DeepSeek R1', provider: 'deepseek', category: 'china' },
+      { id: 'yi-34b-chat', label: 'Yi 34B Chat', provider: 'yi', category: 'china' },
+      { id: 'glm-4', label: 'GLM-4', provider: 'zhipu', category: 'china' },
+      { id: 'moonshot-v1', label: 'Moonshot v1', provider: 'moonshot', category: 'china' }
+    ];
   }
 }

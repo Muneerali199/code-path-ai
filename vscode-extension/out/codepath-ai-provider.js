@@ -30,9 +30,10 @@ exports.CodePathAIProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const axios_1 = __importDefault(require("axios"));
 class CodePathAIProvider {
-    constructor() {
+    constructor(context) {
+        this.context = context;
         // Get backend URL from configuration
-        this.backendUrl = vscode.workspace.getConfiguration('codepath-ai').get('backendUrl') || 'http://localhost:3000';
+        this.backendUrl = vscode.workspace.getConfiguration('codepath-ai').get('backendUrl') || 'http://localhost:3001';
         this.sessionId = this.generateSessionId();
         // Initialize user ID (could be from settings or generated)
         this.userId = this.getUserId();
@@ -44,10 +45,29 @@ class CodePathAIProvider {
         // Could be retrieved from VSCode settings or generated
         return vscode.workspace.getConfiguration('codepath-ai').get('userId') || undefined;
     }
+    getSelectedModel() {
+        const config = vscode.workspace.getConfiguration('codepath-ai');
+        const model = config.get('model') || undefined;
+        const provider = config.get('provider') || undefined;
+        return { model, provider };
+    }
+    async getUserApiKey() {
+        const secret = await this.context.secrets.get('codepath-ai.userApiKey');
+        if (secret) {
+            return secret;
+        }
+        const configFallback = vscode.workspace.getConfiguration('codepath-ai').get('userApiKey');
+        return configFallback || undefined;
+    }
     async sendRequest(request) {
         try {
+            const { model, provider } = this.getSelectedModel();
+            const userApiKey = await this.getUserApiKey();
             const response = await axios_1.default.post(`${this.backendUrl}/ai/vscode/process`, {
                 ...request,
+                model,
+                provider,
+                userApiKey,
                 userId: this.userId,
                 sessionId: this.sessionId
             }, {
@@ -66,6 +86,85 @@ class CodePathAIProvider {
                 error: error.response?.data?.error || error.message || 'Unknown error occurred'
             };
         }
+    }
+    async handleSelectModel() {
+        const models = await this.getModelOptions();
+        const items = models.map(model => ({
+            label: model.label,
+            description: `${model.provider} - ${model.id}`,
+            detail: model.category === 'trending' ? 'Trending' : model.category === 'china' ? 'China' : 'Other',
+            model
+        }));
+        const selection = await vscode.window.showQuickPick(items, {
+            placeHolder: 'Select an AI model'
+        });
+        if (!selection) {
+            return;
+        }
+        const config = vscode.workspace.getConfiguration('codepath-ai');
+        await config.update('model', selection.model.id, vscode.ConfigurationTarget.Global);
+        await config.update('provider', selection.model.provider, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(`CodePath AI model set to ${selection.model.label}`);
+    }
+    async handleSetUserApiKey() {
+        const apiKey = await vscode.window.showInputBox({
+            prompt: 'Enter your model provider API key',
+            password: true,
+            placeHolder: 'e.g., sk-...'
+        });
+        if (!apiKey) {
+            return;
+        }
+        await this.context.secrets.store('codepath-ai.userApiKey', apiKey);
+        vscode.window.showInformationMessage('User API key saved securely.');
+    }
+    async handleClearUserApiKey() {
+        await this.context.secrets.delete('codepath-ai.userApiKey');
+        vscode.window.showInformationMessage('User API key cleared.');
+    }
+    async getModelOptions() {
+        const config = vscode.workspace.getConfiguration('codepath-ai');
+        const source = config.get('modelListSource') || 'dynamic';
+        if (source === 'dynamic') {
+            const remote = await this.fetchModelsFromBackend();
+            if (remote && remote.length > 0) {
+                return remote;
+            }
+        }
+        return this.getFallbackModels();
+    }
+    async fetchModelsFromBackend() {
+        try {
+            const response = await axios_1.default.get(`${this.backendUrl}/ai/vscode/models`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${vscode.workspace.getConfiguration('codepath-ai').get('apiKey') || ''}`
+                },
+                timeout: 10000
+            });
+            if (response.data?.models && Array.isArray(response.data.models)) {
+                return response.data.models;
+            }
+            return null;
+        }
+        catch (error) {
+            console.warn('Failed to fetch models from backend, using fallback list.', error);
+            return null;
+        }
+    }
+    getFallbackModels() {
+        return [
+            { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', category: 'trending' },
+            { id: 'gpt-4.1', label: 'GPT-4.1', provider: 'openai', category: 'trending' },
+            { id: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', provider: 'anthropic', category: 'trending' },
+            { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', provider: 'google', category: 'trending' },
+            { id: 'mistral-large', label: 'Mistral Large', provider: 'mistral', category: 'trending' },
+            { id: 'qwen2.5-72b-instruct', label: 'Qwen 2.5 72B Instruct', provider: 'qwen', category: 'china' },
+            { id: 'deepseek-r1', label: 'DeepSeek R1', provider: 'deepseek', category: 'china' },
+            { id: 'yi-34b-chat', label: 'Yi 34B Chat', provider: 'yi', category: 'china' },
+            { id: 'glm-4', label: 'GLM-4', provider: 'zhipu', category: 'china' },
+            { id: 'moonshot-v1', label: 'Moonshot v1', provider: 'moonshot', category: 'china' }
+        ];
     }
     async handleExplainCode() {
         const editor = vscode.window.activeTextEditor;
@@ -333,6 +432,9 @@ class CodePathAIProvider {
     }
     getFollowingLines(editor, endLine) {
         const documentEndLine = editor.document.lineCount - 1;
+        if (endLine >= documentEndLine) {
+            return '';
+        }
         const end = Math.min(documentEndLine, endLine + 5); // Get up to 5 following lines
         const range = new vscode.Range(new vscode.Position(endLine + 1, 0), new vscode.Position(end, editor.document.lineAt(end).range.end.character));
         return editor.document.getText(range);

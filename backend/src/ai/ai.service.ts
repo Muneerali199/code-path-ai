@@ -57,6 +57,8 @@ export class AiService {
     provider?: 'openai' | 'claude' | 'gemini' | 'local' | 'deepseek' | 'mistral';
     mode?: 'explain' | 'create';
     enableResearch?: boolean;
+    apiKey?: string;
+    model?: string;
     context?: {
       files?: Array<{ path: string; content: string }>;
       activeFile?: string;
@@ -65,6 +67,7 @@ export class AiService {
   }) {
     const provider = request.provider || 'mistral';
     const mode = request.mode || 'explain';
+    const resolvedModel = this.resolveModel(provider, request.model);
 
     this.logger.log(`Processing chat request with provider: ${provider}, mode: ${mode}, research: ${request.enableResearch}`);
 
@@ -85,6 +88,7 @@ export class AiService {
 
       const enrichedRequest = {
         ...request,
+        model: resolvedModel,
         context: {
           ...request.context,
           researchData: researchContext,
@@ -93,16 +97,16 @@ export class AiService {
 
       switch (provider) {
         case 'openai':
-          response = await this.chatWithOpenAI(request, mode);
+          response = await this.chatWithOpenAI(enrichedRequest, mode);
           break;
         case 'claude':
-          response = await this.chatWithClaude(request, mode);
+          response = await this.chatWithClaude(enrichedRequest, mode);
           break;
         case 'gemini':
-          response = await this.chatWithGemini(request, mode);
+          response = await this.chatWithGemini(enrichedRequest, mode);
           break;
         case 'deepseek':
-          response = await this.chatWithDeepSeek(request, mode);
+          response = await this.chatWithDeepSeek(enrichedRequest, mode);
           break;
         case 'mistral':
           response = await this.chatWithMistral(enrichedRequest, mode);
@@ -117,6 +121,7 @@ export class AiService {
       return {
         response,
         provider,
+        model: resolvedModel,
         mode,
         researchPerformed: !!researchContext,
       };
@@ -138,7 +143,11 @@ export class AiService {
   }
 
   private async chatWithOpenAI(request: any, mode: string): Promise<string> {
-    if (!this.openai) {
+    const client = request.apiKey
+      ? new OpenAI({ apiKey: request.apiKey })
+      : this.openai;
+
+    if (!client) {
       // In development, provide a mock response if API key is not configured
       if (process.env.NODE_ENV !== 'production') {
         return `This is a simulated response from OpenAI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your OpenAI API key.`;
@@ -148,8 +157,8 @@ export class AiService {
     
     const systemPrompt = this.getSystemPrompt(mode);
     
-    const completion = await this.openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+    const completion = await client.chat.completions.create({
+      model: request.model || 'gpt-4-turbo-preview',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: request.message },
@@ -161,7 +170,11 @@ export class AiService {
   }
 
   private async chatWithClaude(request: any, mode: string): Promise<string> {
-    if (!this.claude) {
+    const client = request.apiKey
+      ? new Anthropic({ apiKey: request.apiKey })
+      : this.claude;
+
+    if (!client) {
       // In development, provide a mock response if API key is not configured
       if (process.env.NODE_ENV !== 'production') {
         return `This is a simulated response from Claude AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Anthropic API key.`;
@@ -171,8 +184,8 @@ export class AiService {
     
     const systemPrompt = this.getSystemPrompt(mode);
     
-    const message = await this.claude.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+    const message = await client.messages.create({
+      model: request.model || 'claude-3-5-sonnet-20241022',
       max_tokens: 4096,
       system: systemPrompt,
       messages: [
@@ -186,7 +199,11 @@ export class AiService {
   }
 
   private async chatWithGemini(request: any, mode: string): Promise<string> {
-    if (!this.gemini) {
+    const client = request.apiKey
+      ? new GoogleGenerativeAI(request.apiKey)
+      : this.gemini;
+
+    if (!client) {
       // In development, provide a mock response if API key is not configured
       if (process.env.NODE_ENV !== 'production') {
         return `This is a simulated response from Google Gemini AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Google AI API key.`;
@@ -196,7 +213,7 @@ export class AiService {
     
     const systemPrompt = this.getSystemPrompt(mode);
     
-    const model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = client.getGenerativeModel({ model: request.model || 'gemini-1.5-pro' });
     
     const chat = model.startChat({
       history: [],
@@ -208,7 +225,11 @@ export class AiService {
   }
 
   private async chatWithDeepSeek(request: any, mode: string): Promise<string> {
-    if (!this.deepseek) {
+    const client = request.apiKey
+      ? new OpenAI({ apiKey: request.apiKey, baseURL: 'https://api.deepseek.com' })
+      : this.deepseek;
+
+    if (!client) {
       // In development, provide a mock response if API key is not configured
       if (process.env.NODE_ENV !== 'production') {
         return `This is a simulated response from DeepSeek AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your DeepSeek API key.`;
@@ -226,8 +247,8 @@ export class AiService {
       messages.unshift({ role: 'system', content: systemPrompt });
     }
 
-    const completion = await this.deepseek.chat.completions.create({
-      model: 'deepseek-chat',
+    const completion = await client.chat.completions.create({
+      model: request.model || 'deepseek-chat',
       messages,
       stream: false,
     });
@@ -236,7 +257,11 @@ export class AiService {
   }
 
   private async chatWithMistral(request: any, mode: string): Promise<string> {
-    if (!this.mistral) {
+    const client = request.apiKey
+      ? new OpenAI({ apiKey: request.apiKey, baseURL: 'https://api.mistral.ai/v1' })
+      : this.mistral;
+
+    if (!client) {
       // In development, provide a mock response if API key is not configured
       if (process.env.NODE_ENV !== 'production') {
         return `This is a simulated response from Mistral AI.\n\nSelected code: ${request.code || request.message || 'No code provided'}\n\nFor a real response, please configure your Mistral API key.`;
@@ -282,8 +307,8 @@ export class AiService {
     try {
       this.logger.debug(`[Mistral] Sending ${messages.length} messages, mode: ${mode}`);
       
-      const completion = await this.mistral.chat.completions.create({
-        model: 'mistral-large-latest',
+      const completion = await client.chat.completions.create({
+        model: request.model || 'mistral-large-latest',
         messages: messages as any,
         max_tokens: 4096,
         temperature: 0.7,
@@ -332,5 +357,16 @@ export class AiService {
     };
 
     return models[provider] || [];
+  }
+
+  private resolveModel(provider: string, requestedModel?: string): string {
+    const available = this.getModelsForProvider(provider);
+    if (requestedModel && available.includes(requestedModel)) {
+      return requestedModel;
+    }
+    if (available.length > 0) {
+      return available[0];
+    }
+    return requestedModel || 'mistral-large-latest';
   }
 }

@@ -28,6 +28,9 @@ Processes a VSCode extension request and returns AI-generated results.
   "message": "string (optional)",
   "language": "string (optional)",
   "action": "explain|generate|debug|analyze|refactor|create",
+  "model": "string (optional)",
+  "provider": "string (optional)",
+  "userApiKey": "string (optional)",
   "context": {
     "fileName": "string (optional)",
     "filePath": "string (optional)",
@@ -84,6 +87,25 @@ Returns information about the capabilities of the VSCode extension.
   "actions": ["explain", "generate", "debug", "analyze", "refactor", "create"],
   "supportedLanguages": ["javascript", "typescript", "..."],
   "features": ["Code explanation", "Code generation", "..."]
+}
+```
+
+### GET /ai/vscode/models
+
+Returns a list of models available to the extension.
+
+#### Response
+
+```json
+{
+  "models": [
+    {
+      "id": "string",
+      "label": "string",
+      "provider": "string",
+      "category": "trending|china|other"
+    }
+  ]
 }
 ```
 

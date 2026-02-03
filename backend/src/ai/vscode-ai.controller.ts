@@ -10,6 +10,9 @@ export class VscodeRequestDto {
   message?: string;
   language?: string;
   action: 'explain' | 'generate' | 'debug' | 'analyze' | 'refactor' | 'create';
+  model?: string;
+  provider?: string;
+  userApiKey?: string;
   context?: {
     fileName?: string;
     filePath?: string;
@@ -90,6 +93,16 @@ export class VscodeAiController {
         'Code refactoring',
         'Test generation'
       ]
+    };
+  }
+
+  @Get('models')
+  @UseGuards(ApiKeyGuard)
+  @ApiOperation({ summary: 'Get available models for VSCode extension' })
+  @ApiResponse({ status: 200, description: 'Model catalog' })
+  getModels(): any {
+    return {
+      models: this.vscodeAiService.getModelCatalog()
     };
   }
 }

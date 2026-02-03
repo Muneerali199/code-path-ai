@@ -60,6 +60,10 @@ The extension can be configured through VSCode settings:
 
 - `codepath-ai.backendUrl`: URL of the CodePath backend service (default: `http://localhost:3000`)
 - `codepath-ai.apiKey`: API key for authenticating with the backend
+- `codepath-ai.userApiKey`: Optional provider API key (fallback if Secret Storage isn't available)
+- `codepath-ai.model`: Selected AI model ID
+- `codepath-ai.provider`: Selected AI model provider
+- `codepath-ai.modelListSource`: Model list source (`dynamic` or `static`)
 - `codepath-ai.userId`: User ID for tracking usage (optional)
 
 To configure these settings:
@@ -74,6 +78,8 @@ Alternatively, you can add these to your `settings.json`:
 {
   "codepath-ai.backendUrl": "https://your-codepath-backend.com",
   "codepath-ai.apiKey": "your-api-key-here",
+  "codepath-ai.model": "gpt-4o",
+  "codepath-ai.provider": "openai",
   "codepath-ai.userId": "optional-user-id"
 }
 ```
@@ -111,6 +117,18 @@ Alternatively, you can add these to your `settings.json`:
 1. Select the code you want to refactor
 2. Right-click and choose "CodePath: Refactor Code" from the context menu
 3. Or use the command palette and run "CodePath: Refactor Code"
+
+### Model Selection
+
+1. Open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run "CodePath: Select Model"
+3. Choose from trending models or China-based models
+
+### User API Key
+
+1. Open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run "CodePath: Set User API Key"
+3. Paste your provider key (stored in VSCode Secret Storage)
 
 ## API Keys
 

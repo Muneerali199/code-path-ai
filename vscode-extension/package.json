@@ -15,7 +15,10 @@
     "onCommand:codepath-ai.generateCode",
     "onCommand:codepath-ai.debugCode",
     "onCommand:codepath-ai.analyzeCode",
-    "onCommand:codepath-ai.refactorCode"
+    "onCommand:codepath-ai.refactorCode",
+    "onCommand:codepath-ai.selectModel",
+    "onCommand:codepath-ai.setUserApiKey",
+    "onCommand:codepath-ai.clearUserApiKey"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -39,6 +42,18 @@
       {
         "command": "codepath-ai.refactorCode",
         "title": "CodePath: Refactor Code"
+      },
+      {
+        "command": "codepath-ai.selectModel",
+        "title": "CodePath: Select Model"
+      },
+      {
+        "command": "codepath-ai.setUserApiKey",
+        "title": "CodePath: Set User API Key"
+      },
+      {
+        "command": "codepath-ai.clearUserApiKey",
+        "title": "CodePath: Clear User API Key"
       }
     ],
     "menus": {
@@ -63,6 +78,20 @@
           "when": "editorHasSelection",
           "group": "codepath-ai@4"
         }
+      ],
+      "commandPalette": [
+        {
+          "command": "codepath-ai.selectModel",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.setUserApiKey",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.clearUserApiKey",
+          "when": "true"
+        }
       ]
     },
     "configuration": {
@@ -78,6 +107,75 @@
           "default": "",
           "description": "API key for authenticating with the CodePath backend"
         },
+        "codepath-ai.userApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional provider API key (fallback if Secret Storage is unavailable)"
+        },
+        "codepath-ai.model": {
+          "type": "string",
+          "default": "",
+          "description": "Selected AI model ID",
+          "enum": [
+            "gpt-4o",
+            "gpt-4.1",
+            "claude-3.5-sonnet",
+            "mistral-large",
+            "gemini-1.5-pro",
+            "qwen2.5-72b-instruct",
+            "deepseek-r1",
+            "yi-34b-chat",
+            "glm-4",
+            "moonshot-v1"
+          ],
+          "enumDescriptions": [
+            "OpenAI — best overall for most tasks",
+            "OpenAI — strong general model",
+            "Anthropic — excellent reasoning + refactors",
+            "Mistral — fast and cost‑effective",
+            "Google — strong multimodal + long context",
+            "Qwen — China region model",
+            "DeepSeek — China region model",
+            "Yi — China region model",
+            "Zhipu — China region model",
+            "Moonshot — China region model"
+          ],
+          "markdownDescription": "Selected AI model ID. You can also enter any custom model your backend supports."
+        },
+        "codepath-ai.provider": {
+          "type": "string",
+          "default": "",
+          "description": "Selected AI model provider",
+          "enum": [
+            "openai",
+            "anthropic",
+            "mistral",
+            "google",
+            "qwen",
+            "deepseek",
+            "yi",
+            "zhipu",
+            "moonshot"
+          ],
+          "enumDescriptions": [
+            "OpenAI",
+            "Anthropic",
+            "Mistral",
+            "Google",
+            "Qwen",
+            "DeepSeek",
+            "Yi",
+            "Zhipu",
+            "Moonshot"
+          ],
+          "markdownDescription": "Selected AI provider. You can also enter any custom provider your backend supports."
+        },
+        "codepath-ai.modelListSource": {
+          "type": "string",
+          "default": "dynamic",
+          "enum": ["dynamic", "static"],
+          "description": "Model list source: fetch from backend or use built-in fallback"
+        },
         "codepath-ai.userId": {
           "type": "string",
           "default": "",
@@ -90,7 +188,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",
@@ -111,3 +209,5 @@
     "axios": "^1.6.0"
   }
 }
+
+

@@ -4,7 +4,7 @@ import { CodePathAIProvider } from './codepath-ai-provider';
 export function activate(context: vscode.ExtensionContext) {
     console.log('CodePath AI extension activated');
 
-    const aiProvider = new CodePathAIProvider();
+    const aiProvider = new CodePathAIProvider(context);
 
     // Register commands
     const explainCodeCommand = vscode.commands.registerCommand('codepath-ai.explainCode', async () => {
@@ -27,13 +27,28 @@ export function activate(context: vscode.ExtensionContext) {
         await aiProvider.handleRefactorCode();
     });
 
+    const selectModelCommand = vscode.commands.registerCommand('codepath-ai.selectModel', async () => {
+        await aiProvider.handleSelectModel();
+    });
+
+    const setUserApiKeyCommand = vscode.commands.registerCommand('codepath-ai.setUserApiKey', async () => {
+        await aiProvider.handleSetUserApiKey();
+    });
+
+    const clearUserApiKeyCommand = vscode.commands.registerCommand('codepath-ai.clearUserApiKey', async () => {
+        await aiProvider.handleClearUserApiKey();
+    });
+
     // Add all disposables to context
     context.subscriptions.push(
         explainCodeCommand,
         generateCodeCommand,
         debugCodeCommand,
         analyzeCodeCommand,
-        refactorCodeCommand
+        refactorCodeCommand,
+        selectModelCommand,
+        setUserApiKeyCommand,
+        clearUserApiKeyCommand
     );
 }
 
