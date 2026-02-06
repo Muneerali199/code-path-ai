@@ -63,6 +63,9 @@ class CodePathAIProvider {
         try {
             const { model, provider } = this.getSelectedModel();
             const userApiKey = await this.getUserApiKey();
+            if (provider === 'nvidia') {
+                return await this.sendNimRequest(request, model, userApiKey);
+            }
             const response = await axios_1.default.post(`${this.backendUrl}/ai/vscode/process`, {
                 ...request,
                 model,
@@ -85,6 +88,63 @@ class CodePathAIProvider {
                 success: false,
                 error: error.response?.data?.error || error.message || 'Unknown error occurred'
             };
+        }
+    }
+    async sendNimRequest(request, model, userApiKey) {
+        if (!userApiKey) {
+            return { success: false, error: 'Missing user API key. Set it with "CodePath: Set User API Key".' };
+        }
+        const config = vscode.workspace.getConfiguration('codepath-ai');
+        const invokeUrl = config.get('nimInvokeUrl') || 'https://integrate.api.nvidia.com/v1/chat/completions';
+        const thinking = config.get('nimThinking') ?? true;
+        const messages = this.buildNimMessages(request);
+        try {
+            const response = await axios_1.default.post(invokeUrl, {
+                model: model || 'moonshotai/kimi-k2.5',
+                messages,
+                max_tokens: 16384,
+                temperature: 1.0,
+                top_p: 1.0,
+                stream: false,
+                chat_template_kwargs: { thinking }
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userApiKey}`
+                },
+                timeout: 60000
+            });
+            const content = response.data?.choices?.[0]?.message?.content;
+            if (!content) {
+                return { success: false, error: 'Empty response from NIM.' };
+            }
+            return { success: true, data: { response: content }, modelUsed: model || 'moonshotai/kimi-k2.5' };
+        }
+        catch (error) {
+            return {
+                success: false,
+                error: error.response?.data?.error || error.message || 'Unknown error occurred'
+            };
+        }
+    }
+    buildNimMessages(request) {
+        const language = request.language || 'code';
+        const code = request.code || '';
+        const message = request.message || '';
+        switch (request.action) {
+            case 'explain':
+                return [{ role: 'user', content: `Explain the following ${language}:\n\n${code}` }];
+            case 'generate':
+                return [{ role: 'user', content: `Generate ${language} for the following request:\n\n${message}` }];
+            case 'debug':
+                return [{ role: 'user', content: `Debug the following ${language}.\nIssue: ${message || 'No issue provided'}\n\n${code}` }];
+            case 'analyze':
+                return [{ role: 'user', content: `Analyze the following ${language} for ${message || 'issues'}:\n\n${code}` }];
+            case 'refactor':
+                return [{ role: 'user', content: `Refactor the following ${language}:\n\n${code}` }];
+            case 'create':
+            default:
+                return [{ role: 'user', content: message || code }];
         }
     }
     async handleSelectModel() {
@@ -154,6 +214,7 @@ class CodePathAIProvider {
     }
     getFallbackModels() {
         return [
+            { id: 'moonshotai/kimi-k2.5', label: 'Kimi K2.5 (NVIDIA NIM)', provider: 'nvidia', category: 'trending' },
             { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai', category: 'trending' },
             { id: 'gpt-4.1', label: 'GPT-4.1', provider: 'openai', category: 'trending' },
             { id: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', provider: 'anthropic', category: 'trending' },

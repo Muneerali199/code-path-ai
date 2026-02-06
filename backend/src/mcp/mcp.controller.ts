@@ -7,6 +7,11 @@ export class McpCallDto {
   params?: any;
 }
 
+export class McpConnectionDto {
+  serverId: string;
+  url?: string | null;
+}
+
 @ApiTags('MCP (Model Context Protocol)')
 @Controller('mcp')
 export class McpController {
@@ -38,6 +43,22 @@ export class McpController {
   @ApiResponse({ status: 200, description: 'List of available tools' })
   getTools() {
     return this.mcpService.getTools();
+  }
+
+  @Get('connection')
+  @ApiOperation({ summary: 'Get active MCP connection' })
+  @ApiResponse({ status: 200, description: 'Active MCP connection' })
+  getConnection() {
+    return this.mcpService.getActiveServer();
+  }
+
+  @Post('connection')
+  @ApiOperation({ summary: 'Set active MCP connection' })
+  @ApiBody({ type: McpConnectionDto })
+  @ApiResponse({ status: 200, description: 'Active MCP connection updated' })
+  setConnection(@Body() request: McpConnectionDto) {
+    this.mcpService.setActiveServer(request.serverId, request.url ?? null);
+    return this.mcpService.getActiveServer();
   }
 
   @Post('call')

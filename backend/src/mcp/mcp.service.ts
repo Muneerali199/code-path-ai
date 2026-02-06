@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
 import { EnhancedAiService } from '../ai/enhanced-ai.service';
 import { FileManagerService } from '../file-manager/file-manager.service';
 
@@ -32,17 +33,102 @@ export interface McpCallResponse {
 @Injectable()
 export class McpService {
   private readonly logger = new Logger(McpService.name);
+  private activeServerId = 'local';
+  private activeServerUrl: string | null = null;
+  private readonly localHostHints = ['localhost:3001', '127.0.0.1:3001'];
   
   constructor(
     private readonly enhancedAiService: EnhancedAiService,
     private readonly fileManagerService: FileManagerService,
   ) {}
 
+  setActiveServer(serverId: string, url: string | null) {
+    this.activeServerId = serverId || 'local';
+    this.activeServerUrl = url?.trim() || null;
+    this.logger.log(`Active MCP server set to ${this.activeServerId} (${this.activeServerUrl ?? 'local'})`);
+  }
+
+  getActiveServer() {
+    return {
+      serverId: this.activeServerId,
+      url: this.activeServerUrl,
+      mode: this.shouldProxyRemote() ? 'remote' : 'local',
+    };
+  }
+
+  private shouldProxyRemote(): boolean {
+    if (!this.activeServerUrl) return false;
+    const url = this.activeServerUrl.toLowerCase();
+    return !this.localHostHints.some((hint) => url.includes(hint));
+  }
+
+  private stripMcpPrefix(method: string): string | null {
+    return method.startsWith('mcp/') ? method.slice(4) : null;
+  }
+
+  private async callRemote(
+    method: string,
+    params?: any,
+  ): Promise<McpCallResponse> {
+    if (!this.activeServerUrl) {
+      return { error: { code: 400, message: 'No MCP server URL configured' } };
+    }
+
+    const payload = {
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method,
+      params: params ?? {},
+    };
+
+    try {
+      const response = await axios.post(this.activeServerUrl, payload, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 15000,
+      });
+      const data = response.data;
+
+      if (data?.error || data?.result) {
+        return data as McpCallResponse;
+      }
+
+      return { result: data };
+    } catch (error: any) {
+      const message = error?.response?.data?.error?.message ?? error?.message ?? 'Remote MCP call failed';
+      this.logger.error(`Remote MCP call error: ${message}`);
+      return { error: { code: 502, message } };
+    }
+  }
+
+  private async callRemoteWithFallback(
+    primaryMethod: string,
+    fallbackMethod: string | null,
+    params?: any,
+  ): Promise<McpCallResponse> {
+    const primary = await this.callRemote(primaryMethod, params);
+    if (!primary.error || !fallbackMethod) {
+      return primary;
+    }
+    return this.callRemote(fallbackMethod, params);
+  }
+
   /**
    * Get available resources from the workspace
    */
   async getResources(): Promise<McpResource[]> {
     try {
+      if (this.shouldProxyRemote()) {
+        const remote = await this.callRemoteWithFallback('mcp/resources/list', 'resources/list');
+        if (remote.error) {
+          throw new Error(remote.error.message);
+        }
+        const resources = (remote.result as any)?.resources ?? (remote.result as any)?.result?.resources ?? remote.result;
+        if (Array.isArray(resources)) {
+          return resources;
+        }
+        throw new Error('Remote MCP returned invalid resources payload');
+      }
+
       // For now, return a static set of resources
       // In a real implementation, this would dynamically discover resources
       const resources: McpResource[] = [
@@ -86,6 +172,18 @@ export class McpService {
    */
   async getResource(uri: string): Promise<McpResource> {
     try {
+      if (this.shouldProxyRemote()) {
+        const remote = await this.callRemoteWithFallback('mcp/resources/read', 'resources/read', { uri });
+        if (remote.error) {
+          throw new Error(remote.error.message);
+        }
+        const resource = (remote.result as any)?.resource ?? (remote.result as any)?.result ?? remote.result;
+        if (resource && typeof resource === 'object') {
+          return resource as McpResource;
+        }
+        throw new Error('Remote MCP returned invalid resource payload');
+      }
+
       const resources = await this.getResources();
       const resource = resources.find(r => r.uri === uri);
       
@@ -105,6 +203,18 @@ export class McpService {
    */
   async getTools(): Promise<McpTool[]> {
     try {
+      if (this.shouldProxyRemote()) {
+        const remote = await this.callRemoteWithFallback('mcp/tools/list', 'tools/list');
+        if (remote.error) {
+          throw new Error(remote.error.message);
+        }
+        const tools = (remote.result as any)?.tools ?? (remote.result as any)?.result?.tools ?? remote.result;
+        if (Array.isArray(tools)) {
+          return tools;
+        }
+        throw new Error('Remote MCP returned invalid tools payload');
+      }
+
       const tools: McpTool[] = [
         {
           name: 'read_file',
@@ -268,6 +378,11 @@ export class McpService {
   async call(request: McpCallRequest): Promise<McpCallResponse> {
     try {
       const { method, params } = request;
+
+      if (this.shouldProxyRemote()) {
+        const fallback = this.stripMcpPrefix(method);
+        return await this.callRemoteWithFallback(method, fallback, params);
+      }
 
       switch (method) {
         case 'mcp/resources/list':

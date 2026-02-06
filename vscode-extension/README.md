@@ -59,6 +59,8 @@ The extension follows a dual-model architecture:
 The extension can be configured through VSCode settings:
 
 - `codepath-ai.backendUrl`: URL of the CodePath backend service (default: `http://localhost:3001`)
+- `codepath-ai.nimInvokeUrl`: NVIDIA NIM chat completions endpoint
+- `codepath-ai.nimThinking`: Enable NIM thinking template
 - `codepath-ai.apiKey`: API key for authenticating with the backend
 - `codepath-ai.userApiKey`: Optional provider API key (fallback if Secret Storage isn't available)
 - `codepath-ai.model`: Selected AI model ID
@@ -78,8 +80,10 @@ Alternatively, you can add these to your `settings.json`:
 {
   "codepath-ai.backendUrl": "https://your-codepath-backend.com",
   "codepath-ai.apiKey": "your-api-key-here",
-  "codepath-ai.model": "gpt-4o",
-  "codepath-ai.provider": "openai",
+  "codepath-ai.nimInvokeUrl": "https://integrate.api.nvidia.com/v1/chat/completions",
+  "codepath-ai.nimThinking": true,
+  "codepath-ai.model": "moonshotai/kimi-k2.5",
+  "codepath-ai.provider": "nvidia",
   "codepath-ai.userId": "optional-user-id"
 }
 ```
@@ -136,6 +140,62 @@ You can also pick a model/provider directly in Settings via dropdowns:
 1. Open the command palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
 2. Run "CodePath: Set User API Key"
 3. Paste your provider key (stored in VSCode Secret Storage)
+
+### Using NVIDIA NIM Directly (Recommended)
+
+1. Set `codepath-ai.provider` to `nvidia`
+2. Set `codepath-ai.model` to `moonshotai/kimi-k2.5`
+3. Run "CodePath: Set User API Key" and paste your NIM key
+4. Run any CodePath command (explain, generate, debug, analyze, refactor)
+
+## CLI
+
+The CLI uses NVIDIA NIM directly and works on Windows, macOS, and Linux.
+
+### Setup
+
+Set your NIM key in the environment:
+
+```bash
+# macOS/Linux
+export NIM_API_KEY="your-nim-key"
+
+# Windows PowerShell
+$env:NIM_API_KEY="your-nim-key"
+```
+
+Or store it once for future sessions:
+
+```bash
+codepath-ai login --key "your-nim-key"
+```
+
+### Examples
+
+```bash
+codepath-ai explain --file src/app.ts
+codepath-ai generate --text "Create a function that validates email addresses" --lang typescript
+codepath-ai analyze --file src/app.ts --focus security --stream
+codepath-ai debug --file src/app.ts --issue "TypeError when value is null"
+codepath-ai chat --text "Summarize this module's purpose"
+```
+
+### Interactive Chat (Codex-Style)
+
+```bash
+codepath-ai
+```
+
+Inside the chat:
+
+```
+/help
+/login
+/logout
+/model moonshotai/kimi-k2.5
+/thinking on
+/exit
+```
 
 ## API Keys
 

@@ -2,61 +2,68 @@ import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { 
-  Github, 
-  Cloud, 
-  Database, 
-  CreditCard, 
-  Server,
-  Figma,
+  Cloud,
+  GitBranch,
+  Folder,
+  Brain,
+  Globe,
+  MessageSquare,
+  Sparkles,
   Zap,
-  CheckCircle2,
-  Sparkles
+  CheckCircle2
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const mcpServers = [
   { 
-    name: 'GitHub MCP', 
-    icon: Github, 
-    description: 'Code Repository Management',
-    color: '#ffffff',
-    features: ['Pull Requests', 'Issues', 'Actions']
+    name: 'Git MCP', 
+    icon: GitBranch, 
+    description: 'Local Git Operations',
+    color: '#F05032',
+    features: ['Commits', 'Branches', 'Diffs']
   },
   { 
-    name: 'Vercel MCP', 
+    name: 'Filesystem MCP', 
+    icon: Folder, 
+    description: 'Secure File Access',
+    color: '#7C3AED',
+    features: ['Read/Write', 'Search', 'Sandboxed']
+  },
+  { 
+    name: 'Memory MCP', 
+    icon: Brain, 
+    description: 'Persistent Context',
+    color: '#22C55E',
+    features: ['Long-term Notes', 'Summaries', 'Recall']
+  },
+  { 
+    name: 'Everything MCP', 
+    icon: Sparkles, 
+    description: 'Reference Test Server',
+    color: '#E879F9',
+    features: ['All Capabilities', 'Examples', 'Debug']
+  },
+  { 
+    name: 'Fetch MCP', 
+    icon: Globe, 
+    description: 'Web Data Retrieval',
+    color: '#38BDF8',
+    features: ['HTTP Fetch', 'HTML', 'JSON']
+  },
+  { 
+    name: 'Slack MCP', 
+    icon: MessageSquare, 
+    description: 'Team Messaging',
+    color: '#4A154B',
+    features: ['Channels', 'Messages', 'Threads']
+  },
+  { 
+    name: 'Google Drive MCP', 
     icon: Cloud, 
-    description: 'Instant Deployment',
-    color: '#000000',
-    features: ['Auto Deploy', 'Preview URLs', 'Analytics']
-  },
-  { 
-    name: 'MongoDB MCP', 
-    icon: Database, 
-    description: 'Database Operations',
-    color: '#47A248',
-    features: ['Collections', 'Queries', 'Indexes']
-  },
-  { 
-    name: 'Stripe MCP', 
-    icon: CreditCard, 
-    description: 'Payment Processing',
-    color: '#635BFF',
-    features: ['Payments', 'Subscriptions', 'Invoices']
-  },
-  { 
-    name: 'AWS MCP', 
-    icon: Server, 
-    description: 'Cloud Infrastructure',
-    color: '#FF9900',
-    features: ['EC2', 'S3', 'Lambda']
-  },
-  { 
-    name: 'Figma MCP', 
-    icon: Figma, 
-    description: 'Design Integration',
-    color: '#F24E1E',
-    features: ['Components', 'Styles', 'Assets']
+    description: 'Docs & Drive Access',
+    color: '#34A853',
+    features: ['Drive Files', 'Sheets', 'Docs']
   },
 ];
 

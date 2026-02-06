@@ -25,6 +25,9 @@
     "onCommand:codepath-ai.clearUserApiKey"
   ],
   "main": "./out/extension.js",
+  "bin": {
+    "codepath-ai": "./out/cli.js"
+  },
   "contributes": {
     "commands": [
       {
@@ -106,6 +109,16 @@
           "default": "http://localhost:3001",
           "description": "URL of the CodePath backend service"
         },
+        "codepath-ai.nimInvokeUrl": {
+          "type": "string",
+          "default": "https://integrate.api.nvidia.com/v1/chat/completions",
+          "description": "NVIDIA NIM chat completions endpoint"
+        },
+        "codepath-ai.nimThinking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable NIM thinking template (if supported by the model)"
+        },
         "codepath-ai.apiKey": {
           "type": "string",
           "default": "",
@@ -118,9 +131,10 @@
         },
         "codepath-ai.model": {
           "type": "string",
-          "default": "",
+          "default": "moonshotai/kimi-k2.5",
           "description": "Selected AI model ID",
           "enum": [
+            "moonshotai/kimi-k2.5",
             "gpt-4o",
             "gpt-4.1",
             "claude-3.5-sonnet",
@@ -133,6 +147,7 @@
             "moonshot-v1"
           ],
           "enumDescriptions": [
+            "NVIDIA NIM - Kimi K2.5 (primary)",
             "OpenAI - best overall for most tasks",
             "OpenAI - strong general model",
             "Anthropic - excellent reasoning + refactors",
@@ -148,9 +163,10 @@
         },
         "codepath-ai.provider": {
           "type": "string",
-          "default": "",
+          "default": "nvidia",
           "description": "Selected AI model provider",
           "enum": [
+            "nvidia",
             "openai",
             "anthropic",
             "mistral",
@@ -162,6 +178,7 @@
             "moonshot"
           ],
           "enumDescriptions": [
+            "NVIDIA NIM",
             "OpenAI",
             "Anthropic",
             "Mistral",
@@ -213,8 +230,6 @@
     "axios": "^1.6.0"
   }
 }
-
-
 
 
 

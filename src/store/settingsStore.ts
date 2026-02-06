@@ -40,12 +40,23 @@ export interface AISettings {
 
 export interface MCPSettings {
   enabled: boolean;
-  serverUrl: string;
+  activeServerId: string;
+  servers: MCPServerProfile[];
   autoIndex: boolean;
   indexOnSave: boolean;
   contextDepth: number;
   maxFileSize: number;
   excludePatterns: string[];
+}
+
+export interface MCPServerProfile {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  kind?: 'local' | 'reference' | 'community' | 'official';
+  description?: string;
+  isCustom?: boolean;
 }
 
 export interface ShortcutSettings {
@@ -67,6 +78,73 @@ interface SettingsState {
   setShortcut: (key: string, value: string) => void;
   resetSettings: () => void;
 }
+
+const createDefaultMcpServers = (serverUrl?: string): MCPServerProfile[] => ([
+  {
+    id: 'local',
+    name: 'Local MCP Server',
+    url: serverUrl || 'http://localhost:3001',
+    enabled: true,
+    kind: 'local',
+    description: 'Local MCP gateway',
+  },
+  {
+    id: 'git',
+    name: 'Git MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Local git operations',
+  },
+  {
+    id: 'filesystem',
+    name: 'Filesystem MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Secure file operations',
+  },
+  {
+    id: 'fetch',
+    name: 'Fetch MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Web fetching',
+  },
+  {
+    id: 'memory',
+    name: 'Memory MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Persistent memory',
+  },
+  {
+    id: 'everything',
+    name: 'Everything MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Reference/test server',
+  },
+  {
+    id: 'slack',
+    name: 'Slack MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Workspace messaging',
+  },
+  {
+    id: 'gdrive',
+    name: 'Google Drive MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Drive + Sheets',
+  },
+]);
 
 const defaultSettings = {
   theme: {
@@ -104,7 +182,8 @@ const defaultSettings = {
   },
   mcp: {
     enabled: true,
-    serverUrl: 'http://localhost:3001',
+    activeServerId: 'local',
+    servers: createDefaultMcpServers(),
     autoIndex: true,
     indexOnSave: true,
     contextDepth: 3,
@@ -151,6 +230,25 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'codementor-settings',
+      version: 2,
+      migrate: (state, version) => {
+        const nextState = state as SettingsState;
+        if (version < 2) {
+          const currentMcp = (nextState?.mcp ?? defaultSettings.mcp) as any;
+          const legacyServerUrl = currentMcp?.serverUrl as string | undefined;
+          const servers = currentMcp?.servers ?? createDefaultMcpServers(legacyServerUrl);
+          const activeServerId = currentMcp?.activeServerId ?? servers[0]?.id ?? 'local';
+          return {
+            ...nextState,
+            mcp: {
+              ...currentMcp,
+              activeServerId,
+              servers,
+            },
+          };
+        }
+        return nextState;
+      },
     }
   )
 );

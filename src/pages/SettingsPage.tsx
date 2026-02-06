@@ -8,13 +8,15 @@ import {
   Keyboard,
   ChevronRight,
   Check,
+  Plus,
+  Trash2,
   Moon,
   Sun,
   Contrast,
   Save,
   RotateCcw,
 } from 'lucide-react';
-import { useSettingsStore } from '@/store/settingsStore';
+import { MCPServerProfile, useSettingsStore } from '@/store/settingsStore';
 import { NavigationContext } from '@/App';
 
 interface SettingsSection {
@@ -324,30 +326,203 @@ const AISettings: React.FC = () => {
 const MCPSettings: React.FC = () => {
   const mcp = useSettingsStore((state) => state.mcp);
   const setMCP = useSettingsStore((state) => state.setMCP);
+  const BACKEND_URL = 'http://localhost:3001';
+
+  const syncActiveServer = async (server: MCPServerProfile) => {
+    try {
+      await fetch(`${BACKEND_URL}/mcp/connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: server.id, url: server.url || null }),
+      });
+    } catch (error) {
+      console.error('Failed to sync MCP server:', error);
+    }
+  };
+
+  const getNextActiveServerId = (servers: MCPServerProfile[], currentId: string) => {
+    const currentActive = servers.find((server) => server.id === currentId && server.enabled);
+    if (currentActive) return currentId;
+    const firstEnabled = servers.find((server) => server.enabled);
+    return firstEnabled?.id ?? servers[0]?.id ?? '';
+  };
+
+  const updateServers = (servers: MCPServerProfile[], nextActiveId = mcp.activeServerId) => {
+    const activeServerId = getNextActiveServerId(servers, nextActiveId);
+    setMCP({ servers, activeServerId });
+  };
+
+  const updateServer = (id: string, patch: Partial<MCPServerProfile>) => {
+    const servers = mcp.servers.map((server) =>
+      server.id === id ? { ...server, ...patch } : server
+    );
+    updateServers(servers);
+  };
+
+  const setActiveServer = (id: string) => {
+    const servers = mcp.servers.map((server) =>
+      server.id === id ? { ...server, enabled: true } : server
+    );
+    updateServers(servers, id);
+    const active = servers.find((server) => server.id === id);
+    if (active) {
+      void syncActiveServer(active);
+    }
+  };
+
+  const toggleServer = (id: string) => {
+    const servers = mcp.servers.map((server) =>
+      server.id === id ? { ...server, enabled: !server.enabled } : server
+    );
+    updateServers(servers);
+  };
+
+  const addServer = () => {
+    const newServer: MCPServerProfile = {
+      id: `custom-${Date.now()}`,
+      name: 'Custom MCP',
+      url: '',
+      enabled: true,
+      kind: 'community',
+      description: 'Custom endpoint',
+      isCustom: true,
+    };
+    updateServers([...mcp.servers, newServer], newServer.id);
+  };
+
+  const removeServer = (id: string) => {
+    const servers = mcp.servers.filter((server) => server.id !== id);
+    updateServers(servers);
+  };
+
+  const activeServer = mcp.servers.find((server) => server.id === mcp.activeServerId);
+  const activeLabel = activeServer?.name ?? 'No active server';
+  const activeUrl = activeServer?.url || 'Set an endpoint to connect';
+  const kindLabels: Record<string, string> = {
+    local: 'Local',
+    reference: 'Reference',
+    community: 'Community',
+    official: 'Official',
+  };
+
+  React.useEffect(() => {
+    if (activeServer) {
+      void syncActiveServer(activeServer);
+    }
+  }, [activeServer?.id, activeServer?.url]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between p-4 rounded-xl bg-primary/10 border border-primary/30">
         <div>
           <div className="text-sm font-medium text-foreground">MCP Server Status</div>
-          <div className="text-xs text-primary">Connected and indexing</div>
+          <div className="text-xs text-primary">
+            {activeServer?.enabled ? `${activeLabel} selected` : 'No active server'}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <span className="text-sm text-primary">Online</span>
+          <span className="text-sm text-primary">Ready</span>
         </div>
       </div>
 
+      <div className="p-4 rounded-xl bg-neural-panel border border-neural-border">
+        <div className="text-sm text-gray-400 mb-1">Active MCP Server</div>
+        <div className="text-base font-semibold text-white">{activeLabel}</div>
+        <div className="text-xs text-gray-500">{activeUrl}</div>
+      </div>
+
       <div>
-        <h3 className="text-lg font-medium text-white mb-4">Connection</h3>
-        <div>
-          <label className="text-sm text-gray-400 mb-2 block">Server URL</label>
-          <input
-            type="text"
-            value={mcp.serverUrl}
-            onChange={(e) => setMCP({ serverUrl: e.target.value })}
-            className="w-full px-3 py-2 bg-neural-input border border-neural-border rounded-lg text-white text-sm focus:outline-none focus:border-forge/50"
-          />
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-white">Connections</h3>
+          <button
+            onClick={addServer}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-forge text-neural-bg text-sm font-medium hover:bg-forge/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Server
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {mcp.servers.map((server) => (
+            <div
+              key={server.id}
+              className="p-4 rounded-xl bg-neural-panel border border-neural-border"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setActiveServer(server.id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                      mcp.activeServerId === server.id
+                        ? 'bg-forge/20 border-forge text-forge'
+                        : 'bg-neural-input border-neural-border text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {mcp.activeServerId === server.id ? 'Active' : 'Set Active'}
+                  </button>
+
+                  <input
+                    type="text"
+                    value={server.name}
+                    onChange={(e) => updateServer(server.id, { name: e.target.value })}
+                    className="px-3 py-1.5 bg-neural-input border border-neural-border rounded-lg text-sm text-white focus:outline-none focus:border-forge/50"
+                  />
+
+                  {server.kind && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-neural-input text-gray-400 border border-neural-border">
+                      {kindLabels[server.kind] ?? server.kind}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleServer(server.id)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      server.enabled ? 'bg-forge' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                        server.enabled ? 'left-6' : 'left-1'
+                      }`}
+                    />
+                  </button>
+
+                  {server.isCustom && (
+                    <button
+                      onClick={() => removeServer(server.id)}
+                      className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-red-400 transition-colors"
+                      title="Remove server"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="text-sm text-gray-400 mb-2 block">Server URL</label>
+                <input
+                  type="text"
+                  value={server.url}
+                  onChange={(e) => updateServer(server.id, { url: e.target.value })}
+                  onBlur={() => {
+                    if (server.id === mcp.activeServerId) {
+                      void syncActiveServer(server);
+                    }
+                  }}
+                  placeholder="https://your-mcp-host or http://localhost:3001"
+                  className="w-full px-3 py-2 bg-neural-input border border-neural-border rounded-lg text-white text-sm focus:outline-none focus:border-forge/50"
+                />
+                {server.description && (
+                  <div className="mt-2 text-xs text-gray-500">{server.description}</div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

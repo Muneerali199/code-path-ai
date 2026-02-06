@@ -3,18 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Code2, 
   Zap, 
-  Book, 
   Rocket, 
   Terminal, 
   Brain, 
   Package, 
   Settings, 
   Users, 
-  FileCode, 
   GitBranch, 
   Server, 
   Cloud, 
-  Database,
+  Folder,
+  Globe,
+  MessageSquare,
   Search,
   ChevronRight,
   Home,
@@ -431,12 +431,13 @@ export default function DocsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               {[
-                { name: 'GitHub', desc: 'Repository management', icon: GitBranch },
-                { name: 'AWS', desc: 'Cloud infrastructure', icon: Cloud },
-                { name: 'MongoDB', desc: 'Database operations', icon: Database },
-                { name: 'Stripe', desc: 'Payment processing', icon: Server },
-                { name: 'Vercel', desc: 'Instant deployment', icon: Rocket },
-                { name: 'Figma', desc: 'Design integration', icon: FileCode },
+                { name: 'Git', desc: 'Local git operations', icon: GitBranch },
+                { name: 'Filesystem', desc: 'Secure file access', icon: Folder },
+                { name: 'Memory', desc: 'Persistent context', icon: Brain },
+                { name: 'Everything', desc: 'Reference test server', icon: Zap },
+                { name: 'Fetch', desc: 'Web data retrieval', icon: Globe },
+                { name: 'Slack', desc: 'Team messaging', icon: MessageSquare },
+                { name: 'Google Drive', desc: 'Docs & Drive access', icon: Cloud },
               ].map((server) => (
                 <div key={server.name} className="p-4 rounded-xl glass-dark border border-gray-800 hover:border-neon-green/30 transition-colors group">
                   <server.icon className="w-6 h-6 text-neon-green mb-2" />
@@ -452,17 +453,27 @@ export default function DocsPage() {
                 id="mcp-config"
                 language="json"
                 code={`{
-  "mcpServers": {
-    "github": {
-      "enabled": true,
-      "token": "your_github_token"
+  "mcpServers": [
+    {
+      "id": "local",
+      "name": "Local MCP",
+      "url": "http://localhost:3001",
+      "enabled": true
     },
-    "aws": {
-      "enabled": true,
-      "region": "us-east-1",
-      "credentials": "~/.aws/credentials"
+    {
+      "id": "slack",
+      "name": "Slack MCP",
+      "url": "https://your-mcp-host/slack",
+      "enabled": true
+    },
+    {
+      "id": "gdrive",
+      "name": "Google Drive MCP",
+      "url": "https://your-mcp-host/gdrive",
+      "enabled": false
     }
-  }
+  ],
+  "activeServerId": "local"
 }`}
               />
             </div>
