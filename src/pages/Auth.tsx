@@ -35,9 +35,21 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate(getPostAuthRoute());
+      navigate(getPostAuthRoute(), { replace: true });
     }
   }, [user, loading, navigate, getPostAuthRoute]);
+
+  // While Firebase is resolving auth state, show nothing (PageLoader from Suspense covers this)
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#09090f]">
+        <div className="relative h-10 w-10">
+          <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+          <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-violet-500" />
+        </div>
+      </div>
+    );
+  }
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +131,7 @@ export default function Auth() {
   }
 
   return (
-    <div className="dark min-h-screen bg-background flex flex-col">
+    <div className="dark min-h-screen bg-background flex flex-col page-enter">
       {/* Header */}
       <header className="border-b border-border px-6 py-4">
         <div className="flex items-center gap-3">

@@ -30,6 +30,7 @@ import {
   endSession,
   type CodeChange,
 } from '@/services/sessionService'
+import { loadUserSettings } from '@/services/settingsService'
 
 // Helper: wait for Firebase auth to resolve
 function useAuthReady() {
@@ -892,6 +893,13 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
       toast.error(`AI fix failed: ${err.message}`)
     }
   }, [applyGeneratedFiles])
+
+  // Load user settings (AI provider, API keys, etc.) from DB on mount
+  useEffect(() => {
+    if (user?.uid) {
+      loadUserSettings(user.uid).catch(() => {})
+    }
+  }, [user?.uid])
 
   // Start a coding session when project loads
   useEffect(() => {

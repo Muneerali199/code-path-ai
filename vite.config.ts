@@ -29,7 +29,10 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-tooltip'],
           monaco: ['@monaco-editor/react'],
-          utils: ['date-fns', 'clsx', 'tailwind-merge']
+          markdown: ['react-markdown', 'remark-gfm'],
+          animation: ['gsap'],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+          utils: ['date-fns', 'clsx', 'tailwind-merge', 'zod']
         }
       }
     }

@@ -15,6 +15,10 @@ export function activate(context: vscode.ExtensionContext) {
         await aiProvider.handleGenerateCode();
     });
 
+    const generateProjectCommand = vscode.commands.registerCommand('codepath-ai.generateProject', async () => {
+        await aiProvider.handleGenerateProject();
+    });
+
     const debugCodeCommand = vscode.commands.registerCommand('codepath-ai.debugCode', async () => {
         await aiProvider.handleDebugCode();
     });
@@ -47,6 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         explainCodeCommand,
         generateCodeCommand,
+        generateProjectCommand,
         debugCodeCommand,
         analyzeCodeCommand,
         refactorCodeCommand,

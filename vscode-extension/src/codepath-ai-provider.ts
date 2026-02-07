@@ -41,6 +41,22 @@ interface ModelOption {
     category: 'trending' | 'china' | 'other';
 }
 
+interface GenerateProjectForm {
+    projectType?: string;
+    platform?: string;
+    framework?: string;
+    language?: string;
+    styling?: string;
+    state?: string;
+    pages?: string;
+    features?: string;
+    data?: string;
+    auth?: string;
+    tests?: string;
+    deployment?: string;
+    additional?: string;
+}
+
 export class CodePathAIProvider {
     private backendUrl: string;
     private userId: string | undefined;
@@ -407,6 +423,23 @@ export class CodePathAIProvider {
     }
 
     async handleGenerateCode(): Promise<void> {
+        const mode = await vscode.window.showQuickPick(
+            [
+                { label: 'Quick Generate (insert into editor)', value: 'quick' },
+                { label: 'Generate App/Web (wizard)', value: 'wizard' }
+            ],
+            { placeHolder: 'Choose how you want to generate code' }
+        );
+
+        if (!mode) {
+            return;
+        }
+
+        if (mode.value === 'wizard') {
+            await this.handleGenerateProject();
+            return;
+        }
+
         // Prompt user for code description
         const description = await vscode.window.showInputBox({
             prompt: 'Describe the code you want to generate',
@@ -457,6 +490,56 @@ export class CodePathAIProvider {
                 this.insertGeneratedCode(response.data.generatedCode || response.data.response);
             } else {
                 vscode.window.showErrorMessage(`Error: ${response.error || 'Unknown error occurred'}`);
+            }
+        });
+    }
+
+    async handleGenerateProject(): Promise<void> {
+        const panel = vscode.window.createWebviewPanel(
+            'codepathGenerateProject',
+            'Generate App/Web',
+            vscode.ViewColumn.One,
+            { enableScripts: true, retainContextWhenHidden: true }
+        );
+
+        panel.webview.html = this.getGenerateProjectHtml();
+
+        panel.webview.onDidReceiveMessage(async (msg: any) => {
+            switch (msg.command) {
+                case 'submitGenerateProject': {
+                    const form: GenerateProjectForm = msg.payload || {};
+                    panel.webview.postMessage({ command: 'setStatus', status: 'Generating project...' });
+
+                    const request: CodePathRequest = {
+                        message: this.buildProjectPrompt(form),
+                        language: 'markdown',
+                        action: 'generate'
+                    };
+
+                    const response = await this.sendRequest(request);
+                    if (response.success && response.data) {
+                        const content = response.data.generatedCode || response.data.response || '';
+                        panel.webview.html = this.getGenerateProjectResultHtml(content, response.modelUsed);
+                    } else {
+                        panel.webview.postMessage({ command: 'setStatus', status: '' });
+                        vscode.window.showErrorMessage(`Error: ${response.error || 'Unknown error occurred'}`);
+                    }
+                    break;
+                }
+                case 'openInNewFile': {
+                    const content = msg.content || '';
+                    await this.openGeneratedDocument(content);
+                    break;
+                }
+                case 'insertInEditor': {
+                    const content = msg.content || '';
+                    await this.insertGeneratedCode(content);
+                    break;
+                }
+                case 'openGenerator': {
+                    panel.webview.html = this.getGenerateProjectHtml();
+                    break;
+                }
             }
         });
     }
@@ -988,6 +1071,9 @@ ${commonMistake.trim()}`;
                 case 'generateCode':
                     await this.handleGenerateCode();
                     break;
+                case 'generateProject':
+                    await this.handleGenerateProject();
+                    break;
                 case 'debugCode':
                     await this.handleDebugCode();
                     break;
@@ -1284,6 +1370,3 @@ ${commonMistake.trim()}`;
         return wrapInLayout('CodePath AI Dashboard', body);
     }
 }
-
-
-

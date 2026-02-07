@@ -151,6 +151,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_settings: {
+        Row: {
+          id: string
+          firebase_uid: string
+          ai_provider: string
+          ai_providers: Json
+          ai_max_tokens: number
+          ai_temperature: number
+          editor_settings: Json
+          theme_settings: Json
+          mcp_settings: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          firebase_uid: string
+          ai_provider?: string
+          ai_providers?: Json
+          ai_max_tokens?: number
+          ai_temperature?: number
+          editor_settings?: Json
+          theme_settings?: Json
+          mcp_settings?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          firebase_uid?: string
+          ai_provider?: string
+          ai_providers?: Json
+          ai_max_tokens?: number
+          ai_temperature?: number
+          editor_settings?: Json
+          theme_settings?: Json
+          mcp_settings?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

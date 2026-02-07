@@ -1,8 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { prefetchRoute } from '@/hooks/usePrefetch';
+
+// Heavy markdown renderer — only loaded when chat messages exist
+const ReactMarkdown = lazy(() => import('react-markdown'));
+let _remarkGfm: any[] = [];
+import('remark-gfm').then(m => { _remarkGfm = [m.default] });
 import { createProject, listProjects, getDefaultProjectFiles, type ProjectSummary } from '@/services/projectService';
 
 type Category = 'all' | 'schedules' | 'websites' | 'research' | 'videos' | 'more';
@@ -295,7 +299,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090f] text-white flex">
+    <div className="min-h-screen bg-[#09090f] text-white flex page-enter">
       {/* Sidebar */}
       <aside className={`fixed left-0 top-0 h-full bg-[#0c0c14] border-r border-white/[0.06] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] z-50 ${sidebarOpen ? 'w-[272px]' : 'w-0'} overflow-hidden`}>
         <div className="p-4 h-full flex flex-col w-[272px]">
@@ -413,6 +417,7 @@ export default function Dashboard() {
           <div className="border-t border-white/[0.06] pt-3 mt-3 space-y-0.5">
             <button 
               onClick={() => navigate('/profile')}
+              onMouseEnter={() => prefetchRoute('/profile')}
               className="w-full py-2 px-3 text-left text-white/40 hover:text-white/70 hover:bg-white/[0.04] rounded-lg transition-all duration-150 flex items-center gap-2.5 text-[13px]"
             >
               <svg className="w-4 h-4 text-violet-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -422,6 +427,7 @@ export default function Dashboard() {
             </button>
             <button 
               onClick={() => navigate('/settings')}
+              onMouseEnter={() => prefetchRoute('/settings')}
               className="w-full py-2 px-3 text-left text-white/40 hover:text-white/70 hover:bg-white/[0.04] rounded-lg transition-all duration-150 flex items-center gap-2.5 text-[13px]"
             >
               <svg className="w-4 h-4 text-white/25" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -621,8 +627,9 @@ export default function Dashboard() {
                         <p className="leading-relaxed text-white/85 text-[13px]">{message.content}</p>
                       ) : (
                         <div className="prose prose-invert max-w-none">
+                          <Suspense fallback={<p className="text-white/40 text-[13px] animate-pulse">Rendering…</p>}>
                           <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
+                            remarkPlugins={_remarkGfm}
                             components={{
                               h2: ({ node, ...props }) => <h2 className="text-[16px] font-semibold mt-5 mb-2 text-white/90" {...props} />,
                               h3: ({ node, ...props }) => <h3 className="text-[14px] font-semibold mt-4 mb-2 text-white/80" {...props} />,
@@ -650,6 +657,7 @@ export default function Dashboard() {
                           >
                             {message.content}
                           </ReactMarkdown>
+                          </Suspense>
                         </div>
                       )}
                     </div>

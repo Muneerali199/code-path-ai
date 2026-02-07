@@ -71,6 +71,11 @@
     "menus": {
       "editor/context": [
         {
+          "command": "codepath-ai.generateCode",
+          "when": "editorTextFocus",
+          "group": "codepath-ai@0"
+        },
+        {
           "command": "codepath-ai.explainCode",
           "when": "editorHasSelection",
           "group": "codepath-ai@1"
@@ -92,6 +97,26 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "codepath-ai.generateCode",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.explainCode",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.debugCode",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.analyzeCode",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.refactorCode",
+          "when": "true"
+        },
         {
           "command": "codepath-ai.selectModel",
           "when": "true"

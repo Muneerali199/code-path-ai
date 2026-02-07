@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
-import { SettingsPage } from './pages/SettingsPage';
-import { MCPPage } from './pages/MCPPage';
-import { ModelsPage } from './pages/ModelsPage';
 import { ThemeProvider } from './contexts/ThemeContext';
+import PageLoader from './components/ui/PageLoader';
+
+// Lazy-load heavy sub-pages so they don't bloat the editor bundle
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const MCPPage = lazy(() => import('./pages/MCPPage').then(m => ({ default: m.MCPPage })));
+const ModelsPage = lazy(() => import('./pages/ModelsPage').then(m => ({ default: m.ModelsPage })));
 
 // Simple router for the editor application
 type Page = 'editor' | 'settings' | 'mcp' | 'models';
@@ -29,11 +32,11 @@ function App() {
       case 'editor':
         return <MainLayout />;
       case 'settings':
-        return <SettingsPage />;
+        return <Suspense fallback={<PageLoader />}><SettingsPage /></Suspense>;
       case 'mcp':
-        return <MCPPage />;
+        return <Suspense fallback={<PageLoader />}><MCPPage /></Suspense>;
       case 'models':
-        return <ModelsPage />;
+        return <Suspense fallback={<PageLoader />}><ModelsPage /></Suspense>;
       default:
         return <MainLayout />;
     }

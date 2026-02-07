@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Code2, Menu, X, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { prefetchRoute } from '@/hooks/usePrefetch';
 
 export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -86,6 +87,7 @@ export const Navbar = () => {
               <button
                 key={link.name}
                 onClick={() => handleNavClick(link)}
+                onMouseEnter={() => link.isRoute && prefetchRoute(link.href)}
                 className="relative text-sm font-medium text-gray-400 hover:text-white transition-colors duration-300 group"
               >
                 {link.name}
@@ -98,12 +100,14 @@ export const Navbar = () => {
           <div className="hidden lg:flex items-center gap-3 xl:gap-4 shrink-0">
             <button 
               onClick={() => navigate('/auth')}
+              onMouseEnter={() => prefetchRoute('/auth')}
               className="px-3 xl:px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors duration-300"
             >
               Sign In
             </button>
             <button 
               onClick={() => navigate('/auth')}
+              onMouseEnter={() => prefetchRoute('/auth')}
               className="relative px-4 xl:px-6 py-2 xl:py-2.5 rounded-full font-display font-semibold text-sm text-black bg-neon-green overflow-hidden group transition-all duration-300 hover:shadow-glow-lg"
             >
               <span className="relative z-10 flex items-center gap-2">
