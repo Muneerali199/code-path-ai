@@ -100,55 +100,11 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<Monaco | null>(null)
   const fileRef = useRef(file)
-  const prevFileIdRef = useRef(file.id)
+  const onFileChangeRef = useRef(onFileChange)
 
-  // Flag to suppress onChange during programmatic setValue calls
-  // This prevents a race condition where setValue triggers onChange before the parent
-  // component's activeFileRef is updated, which would overwrite the wrong file's content.
-  const isSettingValueRef = useRef(false)
-
-  // Keep fileRef synced for use in onChange callback
+  // Keep refs synced for use in callbacks and auto-save
   useEffect(() => { fileRef.current = file }, [file])
-
-  // When switching to a different file, update editor value + language without remounting
-  // Also sync content when the same file's content changes externally (e.g., after AI generation)
-  useEffect(() => {
-    const editor = editorRef.current
-    const monaco = monacoRef.current
-    if (!editor || !monaco) return
-
-    const isSwitchingFile = file.id !== prevFileIdRef.current
-
-    if (isSwitchingFile) {
-      prevFileIdRef.current = file.id
-      const model = editor.getModel()
-      if (model) {
-        // Update language
-        monaco.editor.setModelLanguage(model, file.language || 'javascript')
-        // Update value — suppress onChange to prevent race condition with parent ref
-        const currentVal = editor.getValue()
-        if (currentVal !== (file.content || '')) {
-          isSettingValueRef.current = true
-          editor.setValue(file.content || '')
-          isSettingValueRef.current = false
-        }
-        // Reset cursor to top
-        editor.setPosition({ lineNumber: 1, column: 1 })
-        editor.revealLine(1)
-      }
-    } else {
-      // Same file — sync content if it changed externally (e.g., AI applied changes)
-      const currentVal = editor.getValue()
-      if (currentVal !== (file.content || '')) {
-        // Preserve cursor position when syncing content
-        const position = editor.getPosition()
-        isSettingValueRef.current = true
-        editor.setValue(file.content || '')
-        isSettingValueRef.current = false
-        if (position) editor.setPosition(position)
-      }
-    }
-  }, [file.id, file.content, file.language])
+  useEffect(() => { onFileChangeRef.current = onFileChange }, [onFileChange])
 
   const [fontSize, setFontSize] = useState(14)
   const [tabSize, setTabSize] = useState(2)
@@ -158,6 +114,22 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
   const [showLineNumbers, setShowLineNumbers] = useState(true)
   const [showFoldingControls, setShowFoldingControls] = useState(true)
   const [autoSave, setAutoSave] = useState(true)
+
+  // Auto-save: uses refs to always read latest file + callback (no stale closures)
+  useEffect(() => {
+    if (!autoSave) return
+    const autoSaveInterval = setInterval(() => {
+      const editor = editorRef.current
+      const currentFile = fileRef.current
+      if (!editor || !currentFile) return
+      const currentContent = editor.getValue()
+      if (currentContent && currentContent !== currentFile.content) {
+        onFileChangeRef.current(currentContent)
+      }
+    }, 3000)
+    return () => clearInterval(autoSaveInterval)
+  }, [autoSave])
+
   const [showSettings, setShowSettings] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -290,30 +262,11 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
     }
   }, [])
 
-  useEffect(() => {
-    // Scroll to bottom when content changes to simulate streaming
-    if (editorRef.current && file) {
-      const model = editorRef.current.getModel();
-      if (model) {
-        const lineCount = model.getLineCount();
-        editorRef.current.revealLine(lineCount);
-      }
-    }
-  }, [file?.content]);
+  // No scroll-to-bottom on content change — editor cursor position is managed by Monaco
 
   const handleEditorDidMount = (editor: any, monaco: Monaco) => {
     editorRef.current = editor
     monacoRef.current = monaco
-
-    // Ensure the editor has the correct content on mount
-    // (critical when re-mounting after streaming animation)
-    const currentContent = fileRef.current?.content || ''
-    const editorContent = editor.getValue()
-    if (editorContent !== currentContent) {
-      isSettingValueRef.current = true
-      editor.setValue(currentContent)
-      isSettingValueRef.current = false
-    }
 
     // Set up the custom theme
     if (monaco) {
@@ -487,19 +440,9 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
       setShowSearch(true)
     })
 
-    // Auto-save functionality
-    if (autoSave) {
-      const autoSaveInterval = setInterval(() => {
-        if (editorRef.current && file) {
-          const currentContent = editorRef.current.getValue()
-          if (currentContent !== file.content) {
-            onFileChange(currentContent)
-          }
-        }
-      }, 2000)
-
-      return () => clearInterval(autoSaveInterval)
-    }
+    // NOTE: Auto-save is handled by a separate useEffect with proper cleanup.
+    // Do NOT add setInterval here — onMount is not a useEffect;
+    // its return value is ignored, so intervals would leak.
   }
 
   const handleSave = () => {
@@ -905,14 +848,16 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
           <div className="flex-1">
             <Editor
               height="100%"
+              path={file.id}
               language={currentLanguage}
-              defaultValue={file.content || ''}
+              value={file.content || ''}
               theme={currentTheme}
               onChange={(value) => {
-                // Skip programmatic setValue calls (prevents race condition on file switch)
-                if (isSettingValueRef.current) return
-                // Skip if value is same as the current file content (prevents mount-triggered onChange)
-                if (value !== undefined && value !== fileRef.current.content) {
+                // Guard: never propagate empty/undefined value if file has real content
+                if (value === undefined || value === null) return
+                if (value === '' && (fileRef.current.content || '').length > 0) return
+                // Only propagate actual user edits (value differs from current file content)
+                if (value !== fileRef.current.content) {
                   onFileChange(value)
                 }
               }}

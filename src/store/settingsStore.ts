@@ -24,7 +24,19 @@ export interface EditorSettings {
   cursorBlinking: 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
 }
 
+export interface AIProviderConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  apiKey: string;
+  baseUrl: string;
+  models: { id: string; name: string; description: string }[];
+  selectedModel: string;
+}
+
 export interface AISettings {
+  defaultProvider: string;       // which provider to use ('default' = built-in edge function)
+  providers: AIProviderConfig[]; // user-configured providers
   defaultModel: string;
   sageEnabled: boolean;
   forgeEnabled: boolean;
@@ -168,7 +180,87 @@ const defaultSettings = {
     cursorBlinking: 'blink' as const,
   },
   ai: {
-    defaultModel: 'gpt-4',
+    defaultProvider: 'default',
+    providers: [
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://api.openai.com/v1',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable, multimodal' },
+          { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & affordable' },
+          { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'High capability + vision' },
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast & efficient' },
+        ],
+        selectedModel: 'gpt-4o-mini',
+      },
+      {
+        id: 'anthropic',
+        name: 'Anthropic (Claude)',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://api.anthropic.com/v1',
+        models: [
+          { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Best for coding' },
+          { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', description: 'Fast & cheap' },
+        ],
+        selectedModel: 'claude-sonnet-4-20250514',
+      },
+      {
+        id: 'google',
+        name: 'Google (Gemini)',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        models: [
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast multimodal' },
+          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Long context' },
+          { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fastest' },
+        ],
+        selectedModel: 'gemini-2.0-flash',
+      },
+      {
+        id: 'groq',
+        name: 'Groq',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        models: [
+          { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Best open-source' },
+          { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', description: 'Fast MoE model' },
+          { id: 'gemma2-9b-it', name: 'Gemma 2 9B', description: 'Compact & capable' },
+        ],
+        selectedModel: 'llama-3.3-70b-versatile',
+      },
+      {
+        id: 'mistral',
+        name: 'Mistral AI',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://api.mistral.ai/v1',
+        models: [
+          { id: 'mistral-large-latest', name: 'Mistral Large', description: 'Most powerful' },
+          { id: 'mistral-small-latest', name: 'Mistral Small', description: 'Fast & efficient' },
+          { id: 'codestral-latest', name: 'Codestral', description: 'Code-specialized' },
+        ],
+        selectedModel: 'mistral-small-latest',
+      },
+      {
+        id: 'deepseek',
+        name: 'DeepSeek',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://api.deepseek.com/v1',
+        models: [
+          { id: 'deepseek-coder', name: 'DeepSeek Coder', description: 'Code generation' },
+          { id: 'deepseek-chat', name: 'DeepSeek Chat', description: 'General purpose' },
+        ],
+        selectedModel: 'deepseek-coder',
+      },
+    ],
+    defaultModel: 'mistral-small-latest',
     sageEnabled: true,
     forgeEnabled: true,
     collaborationMode: 'balanced' as const,
@@ -230,7 +322,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'codementor-settings',
-      version: 2,
+      version: 3,
       migrate: (state, version) => {
         const nextState = state as SettingsState;
         if (version < 2) {
@@ -244,6 +336,26 @@ export const useSettingsStore = create<SettingsState>()(
               ...currentMcp,
               activeServerId,
               servers,
+            },
+            ai: defaultSettings.ai,
+          };
+        }
+        if (version < 3) {
+          // Migrate v2 → v3: add providers & defaultProvider to AI settings
+          const currentAi = (nextState?.ai ?? defaultSettings.ai) as any;
+          return {
+            ...nextState,
+            ai: {
+              ...defaultSettings.ai,
+              // Preserve user's existing behavioral settings
+              collaborationMode: currentAi?.collaborationMode ?? defaultSettings.ai.collaborationMode,
+              autoSuggest: currentAi?.autoSuggest ?? defaultSettings.ai.autoSuggest,
+              suggestOnType: currentAi?.suggestOnType ?? defaultSettings.ai.suggestOnType,
+              explainOnHover: currentAi?.explainOnHover ?? defaultSettings.ai.explainOnHover,
+              showInlineCompletions: currentAi?.showInlineCompletions ?? defaultSettings.ai.showInlineCompletions,
+              completionDelay: currentAi?.completionDelay ?? defaultSettings.ai.completionDelay,
+              maxTokens: currentAi?.maxTokens ?? defaultSettings.ai.maxTokens,
+              temperature: currentAi?.temperature ?? defaultSettings.ai.temperature,
             },
           };
         }

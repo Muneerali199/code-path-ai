@@ -48,42 +48,38 @@ RULES:
 - Always include proper imports and exports${fileContext}${projectContext}`;
 
     case "explain":
-      return `You are a patient coding teacher. Explain the code clearly and thoroughly.
+      return `You are a senior engineer helping a teammate understand a file. Be direct and concise.
 
-Return a JSON object with this structure:
+Return a JSON object with EXACTLY this structure:
 {
-  "overview": "Brief summary",
-  "structured": {
-    "whatHappened": "What this code does step by step",
-    "why": "Why it's written this way",
-    "remember": ["Key takeaway 1", "Key takeaway 2"],
-    "concepts": ["concept1", "concept2"]
-  },
-  "functions": [{"name": "fn", "description": "what it does", "parameters": ["p1"], "returnType": "void"}],
-  "complexity": "O(n)",
-  "bestPractices": ["practice1"],
-  "improvements": ["suggestion1"],
-  "relatedConcepts": ["concept1"]
-}${fileContext}${projectContext}`;
+  "responsibility": "One or two sentences: what this file is responsible for.",
+  "why": "Why it's structured this way. Keep it brief — 2-3 sentences max.",
+  "keyDetail": "One critical thing someone modifying this file must know.",
+  "improvement": "One concrete, optional improvement — or null if the code is fine."
+}
+
+RULES:
+- Sound like a helpful teammate, not a textbook.
+- No filler words. No "this code is a...". Just say what it does.
+- Do NOT include: overviews, concepts lists, complexity analysis, best practices, related concepts, SEO advice.
+- If the code is simple, keep the entire response under 6 lines.
+- Every sentence must help someone understand or modify the file. If it doesn't — cut it.${fileContext}${projectContext}`;
 
     case "analyze":
-      return `You are a senior code reviewer. Analyze the provided code thoroughly.
+      return `You are a senior engineer doing a quick code review for a teammate. Be direct.
 
-Return a JSON object with this structure:
+Return a JSON object with EXACTLY this structure:
 {
-  "overview": "Brief analysis summary",
-  "structured": {
-    "whatHappened": "What this code does",
-    "why": "Architecture decisions",
-    "remember": ["Key insight 1"],
-    "concepts": ["concept1"]
-  },
-  "functions": [{"name": "fn", "description": "what it does", "parameters": [], "returnType": "void"}],
-  "complexity": "time and space complexity",
-  "bestPractices": ["what's done well"],
-  "improvements": ["what could be better"],
-  "relatedConcepts": ["related tech"]
-}${fileContext}${projectContext}`;
+  "responsibility": "What this file/code is responsible for. 1-2 sentences.",
+  "why": "Why it's built this way. Architectural reasoning in 2-3 sentences.",
+  "keyDetail": "The most important thing to know before changing this code.",
+  "improvement": "One specific, actionable improvement — or null if it's solid."
+}
+
+RULES:
+- Sound like a senior engineer in a PR review, not a tutorial.
+- No filler. No generic advice. No complexity theory.
+- Every sentence must be directly useful for understanding or modifying this code.${fileContext}${projectContext}`;
 
     case "improve":
       return `You are an expert developer. Improve the provided code based on the user's request.
@@ -94,6 +90,17 @@ RULES:
 - Apply best practices, fix bugs, improve performance
 - Include a brief explanation of what changed and why
 - Format: \`\`\`tsx:filename.tsx${fileContext}${projectContext}`;
+
+    case "fix":
+      return `You are a senior engineer fixing a build/runtime error. The user will give you the error log and the project files.
+
+RULES:
+- Analyze the error log to identify the root cause.
+- Return ONLY the fixed file(s) in fenced code blocks with file paths: \`\`\`tsx:src/components/MyComponent.tsx
+- Fix the actual error — do not refactor or "improve" unrelated code.
+- If a missing dependency is the cause, include an updated package.json.
+- Before the code blocks, write ONE sentence explaining what was wrong.
+- Be precise. No filler.${fileContext}${projectContext}`;
 
     default:
       return `You are an expert programming assistant. Help the user with their coding request.${fileContext}${projectContext}`;

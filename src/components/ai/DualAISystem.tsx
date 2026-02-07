@@ -16,12 +16,9 @@ import {
   RefreshCw, 
   Settings,
   MessageSquare,
-  Sparkles,
   Lightbulb,
   AlertCircle,
   CheckCircle,
-  Clock,
-  Star,
   Wand2,
   BookOpen,
   FileCode,
@@ -38,26 +35,11 @@ import { extractSkills, type CodeChange } from '@/services/sessionService'
 import { callMistralAI } from '@/services/aiService'
 import { FileGenerationService } from '@/services/fileGeneration'
 
-interface StructuredExplanation {
-  whatHappened: string
-  why: string
-  remember: string[]
-  concepts: string[]
-}
-
 interface CodeExplanation {
-  overview: string
-  structured: StructuredExplanation
-  functions: Array<{
-    name: string
-    description: string
-    parameters: string[]
-    returnType: string
-  }>
-  complexity: string
-  bestPractices: string[]
-  improvements: string[]
-  relatedConcepts: string[]
+  responsibility: string
+  why: string
+  keyDetail: string
+  improvement: string | null
 }
 
 interface CodeGeneration {
@@ -106,60 +88,38 @@ const realExplainAI = async (code: string, language: string, files?: any[], file
   }
 
   const result = await callMistralAI({
-    message: `Analyze this ${language} code from file "${fileName || 'unknown'}". Provide a thorough analysis.`,
-    mode: 'analyze',
+    message: `Explain this ${language} file "${fileName || 'unknown'}". Be concise — I just need to understand what it does and anything I should watch out for.`,
+    mode: 'explain',
     context: {
       currentFile: fileName || 'unknown',
-      currentFileContent: code?.slice(0, 3000), // Limit code size for speed
-      projectFiles: projectFiles.slice(0, 2), // Only 2 files for context
+      currentFileContent: code?.slice(0, 3000),
+      projectFiles: projectFiles.slice(0, 2),
     },
   });
 
-  // Parse the JSON response from Mistral
+  // Parse the JSON response
   try {
     const responseText = result.response.trim();
-    // Try to extract JSON from response (may have markdown wrapping)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
-        overview: parsed.overview || 'Analysis complete.',
-        structured: {
-          whatHappened: parsed.structured?.whatHappened || parsed.overview || '',
-          why: parsed.structured?.why || '',
-          remember: parsed.structured?.remember || [],
-          concepts: parsed.structured?.concepts || extractSkills(code),
-        },
-        functions: (parsed.functions || []).map((f: any) => ({
-          name: f.name || 'unknown',
-          description: f.description || '',
-          parameters: f.parameters || [],
-          returnType: f.returnType || 'void',
-        })),
-        complexity: parsed.complexity || 'N/A',
-        bestPractices: parsed.bestPractices || [],
-        improvements: parsed.improvements || [],
-        relatedConcepts: parsed.relatedConcepts || [],
+        responsibility: parsed.responsibility || parsed.overview || 'No summary available.',
+        why: parsed.why || parsed.structured?.why || '',
+        keyDetail: parsed.keyDetail || parsed.structured?.whatHappened || '',
+        improvement: parsed.improvement || (parsed.improvements?.length ? parsed.improvements[0] : null),
       };
     }
   } catch (e) {
-    console.warn('Failed to parse structured response, using fallback:', e);
+    console.warn('Failed to parse explain response, using fallback:', e);
   }
 
-  // Fallback: return the raw response as overview
+  // Fallback: use raw text
   return {
-    overview: result.response,
-    structured: {
-      whatHappened: result.response.slice(0, 300),
-      why: 'See the full analysis above for details.',
-      remember: ['Review the generated analysis for key insights'],
-      concepts: extractSkills(code),
-    },
-    functions: [],
-    complexity: 'See analysis',
-    bestPractices: ['See full analysis above'],
-    improvements: ['See full analysis above'],
-    relatedConcepts: extractSkills(code),
+    responsibility: result.response.slice(0, 200),
+    why: '',
+    keyDetail: '',
+    improvement: null,
   };
 }
 
@@ -537,195 +497,65 @@ export default function DualAISystem({ code, language, files, onCodeUpdate, onFi
 
             {/* Explanation Results */}
             <ScrollArea className="flex-1 overflow-hidden w-full">
-              <div className="p-4 space-y-4 pr-4">
+              <div className="p-4 space-y-3 pr-4">
                 {explanation ? (
-                  <div className="space-y-4">
-                    {/* Structured Explanation — concise "proof" format */}
+                  <div className="space-y-3">
+                    {/* What this file does */}
                     <Card className="bg-violet-500/[0.06] border-violet-500/20">
                       <CardContent className="p-4 space-y-3">
-                        {/* What happened */}
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Lightbulb className="w-3.5 h-3.5 text-yellow-400" />
-                            <span className="text-[11px] font-semibold text-yellow-300/80 uppercase tracking-wider">What happened</span>
-                          </div>
-                          <p className="text-[12px] text-slate-300 leading-relaxed">{explanation.structured.whatHappened}</p>
-                        </div>
-                        <Separator className="bg-white/[0.06]" />
-                        {/* Why */}
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Brain className="w-3.5 h-3.5 text-blue-400" />
-                            <span className="text-[11px] font-semibold text-blue-300/80 uppercase tracking-wider">Why</span>
-                          </div>
-                          <p className="text-[12px] text-slate-300 leading-relaxed">{explanation.structured.why}</p>
-                        </div>
-                        <Separator className="bg-white/[0.06]" />
-                        {/* What to remember */}
-                        <div>
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <Star className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-[11px] font-semibold text-emerald-300/80 uppercase tracking-wider">Remember</span>
-                          </div>
-                          <ul className="space-y-1">
-                            {explanation.structured.remember.map((item, i) => (
-                              <li key={i} className="text-[12px] text-slate-300 flex items-start gap-1.5 leading-relaxed">
-                                <span className="text-emerald-400/60 mt-0.5">•</span>
-                                {item}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <Separator className="bg-white/[0.06]" />
-                        {/* Concepts */}
                         <div>
                           <div className="flex items-center gap-1.5 mb-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                            <span className="text-[11px] font-semibold text-violet-300/80 uppercase tracking-wider">Concepts</span>
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-[11px] font-semibold text-emerald-300/80 uppercase tracking-wider">What this file does</span>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {explanation.structured.concepts.map((concept, i) => (
-                              <Badge key={i} variant="outline" className="text-[10px] py-0 px-1.5 text-violet-300 border-violet-500/25 bg-violet-500/10">
-                                {concept}
-                              </Badge>
-                            ))}
-                            {explanation.structured.concepts.length === 0 && (
-                              <span className="text-[10px] text-white/20">Write some code to see concepts detected</span>
-                            )}
-                          </div>
+                          <p className="text-[13px] text-slate-200 leading-relaxed">{explanation.responsibility}</p>
                         </div>
-                      </CardContent>
-                    </Card>
 
-                    {/* Overview */}
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center text-gray-200">
-                          <Lightbulb className="w-4 h-4 mr-2 text-yellow-400" />
-                          Overview
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-slate-300 text-sm">{explanation.overview}</p>
-                      </CardContent>
-                    </Card>
-
-                    {/* Functions */}
-                    {explanation.functions.length > 0 && (
-                      <Card className="bg-white/5 border-white/10">
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-sm flex items-center text-gray-200">
-                            <Code className="w-4 h-4 mr-2 text-blue-400" />
-                            Functions
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {explanation.functions.map((func, index) => (
-                            <div key={index} className="bg-white/5 rounded-lg p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="text-sm font-mono text-green-400">{func.name}</h4>
-                                <Badge variant="outline" className="text-xs text-slate-400 border-white/10">
-                                  {func.returnType}
-                                </Badge>
+                        {explanation.why && (
+                          <>
+                            <Separator className="bg-white/[0.06]" />
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Brain className="w-3.5 h-3.5 text-blue-400" />
+                                <span className="text-[11px] font-semibold text-blue-300/80 uppercase tracking-wider">Why it's structured this way</span>
                               </div>
-                              <p className="text-sm text-slate-300 mb-2">{func.description}</p>
-                              {func.parameters.length > 0 && (
-                                <div>
-                                  <p className="text-xs text-slate-400 mb-1">Parameters:</p>
-                                  <ul className="text-xs text-slate-300 space-y-1">
-                                    {func.parameters.map((param, paramIndex) => (
-                                      <li key={paramIndex} className="flex items-center">
-                                        <span className="w-2 h-2 bg-blue-400 rounded-full mr-2"></span>
-                                        {param}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
+                              <p className="text-[13px] text-slate-200 leading-relaxed">{explanation.why}</p>
                             </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    )}
+                          </>
+                        )}
 
-                    {/* Complexity */}
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center text-gray-200">
-                          <Clock className="w-4 h-4 mr-2 text-orange-400" />
-                          Time Complexity
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Badge variant="secondary" className="text-slate-300 bg-white/10">
-                          {explanation.complexity}
-                        </Badge>
-                      </CardContent>
-                    </Card>
+                        {explanation.keyDetail && (
+                          <>
+                            <Separator className="bg-white/[0.06]" />
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                                <span className="text-[11px] font-semibold text-amber-300/80 uppercase tracking-wider">Key detail</span>
+                              </div>
+                              <p className="text-[13px] text-slate-200 leading-relaxed">{explanation.keyDetail}</p>
+                            </div>
+                          </>
+                        )}
 
-                    {/* Best Practices */}
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center text-gray-200">
-                          <CheckCircle className="w-4 h-4 mr-2 text-green-400" />
-                          Best Practices
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {explanation.bestPractices.map((practice, index) => (
-                            <li key={index} className="flex items-start text-sm text-slate-300">
-                              <CheckCircle className="w-4 h-4 text-green-400 mr-2 mt-0.5 flex-shrink-0" />
-                              {practice}
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-
-                    {/* Improvements */}
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center text-gray-200">
-                          <AlertCircle className="w-4 h-4 mr-2 text-yellow-400" />
-                          Suggested Improvements
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2">
-                          {explanation.improvements.map((improvement, index) => (
-                            <li key={index} className="flex items-start text-sm text-slate-300">
-                              <AlertCircle className="w-4 h-4 text-yellow-400 mr-2 mt-0.5 flex-shrink-0" />
-                              {improvement}
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-
-                    {/* Related Concepts */}
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center text-gray-200">
-                          <Sparkles className="w-4 h-4 mr-2 text-purple-400" />
-                          Related Concepts
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex flex-wrap gap-2">
-                          {explanation.relatedConcepts.map((concept, index) => (
-                            <Badge key={index} variant="outline" className="text-slate-300 border-white/10">
-                              {concept}
-                            </Badge>
-                          ))}
-                        </div>
+                        {explanation.improvement && (
+                          <>
+                            <Separator className="bg-white/[0.06]" />
+                            <div>
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Lightbulb className="w-3.5 h-3.5 text-violet-400" />
+                                <span className="text-[11px] font-semibold text-violet-300/80 uppercase tracking-wider">Optional improvement</span>
+                              </div>
+                              <p className="text-[13px] text-slate-200 leading-relaxed">{explanation.improvement}</p>
+                            </div>
+                          </>
+                        )}
                       </CardContent>
                     </Card>
                   </div>
                 ) : (
                   <div className="text-center py-8">
                     <Brain className="w-12 h-12 mx-auto mb-4 text-slate-500" />
-                    <p className="text-slate-400">Click "Explain This Code" to get AI-powered analysis</p>
+                    <p className="text-slate-400">Click "Explain This Code" to get a quick breakdown</p>
                   </div>
                 )}
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { WebContainer } from '@webcontainer/api'
 import {
   RefreshCw, Globe, Smartphone, Maximize2, ExternalLink,
-  AlertCircle, Loader2, Terminal as TerminalIcon
+  AlertCircle, Loader2, Terminal as TerminalIcon, Wand2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Terminal } from '@xterm/xterm'
@@ -23,6 +23,7 @@ interface PreviewPanelProps {
   files: FileNode[]
   className?: string
   dependencies?: { name: string; version: string; status: string }[]
+  onRequestAIFix?: (errorLog: string) => void
 }
 
 // ─── Singleton WebContainer ────────────────────────────────────────────────
@@ -57,15 +58,67 @@ function flattenFiles(nodes: FileNode[]): FileNode[] {
 
 /**
  * Convert FileNode[] → WebContainer FileSystemTree
+ * 
+ * The incoming `files` may be:
+ *  A) A tree with a top-level `src` folder containing children  (default project)
+ *  B) A flat list of files like `main.tsx`, `App.tsx`, `components/Card.tsx`  (AI-generated)
+ *  C) A mix of both after merge
+ * 
+ * WebContainer expects:   /package.json, /vite.config.js, /index.html, /src/main.tsx, /src/App.tsx, …
+ * 
+ * Strategy:
+ *  1. Flatten ALL source files (from folders and flat names)
+ *  2. Determine each file's full path relative to `src/`
+ *  3. Build the WebContainer FS tree from scratch
  */
 function buildFSTree(files: FileNode[]): Record<string, any> {
-  const flat = flattenFiles(files)
-  const pkgFile = flat.find(f => f.name === 'package.json')
+  // ── Step 1: Collect ALL files with their resolved relative paths ──
+  interface ResolvedFile { relPath: string; content: string }
+  const resolved: ResolvedFile[] = []
 
-  // Extract npm imports
+  // Recursively walk the file tree and resolve paths
+  function walkTree(nodes: FileNode[], prefix: string) {
+    for (const node of nodes) {
+      if (node.type === 'folder' && node.children) {
+        walkTree(node.children, prefix ? `${prefix}/${node.name}` : node.name)
+      } else if (node.type === 'file') {
+        // Build the full relative path
+        const fullPath = prefix ? `${prefix}/${node.name}` : node.name
+        resolved.push({ relPath: fullPath, content: node.content || '' })
+      }
+    }
+  }
+  walkTree(files, '')
+
+  // ── Step 2: Normalize paths — strip leading `src/` so everything is relative to src ──
+  // Files inside a `src` folder: src/main.tsx → main.tsx
+  // Files already flat: main.tsx → main.tsx
+  // Files with nested names: components/Card.tsx → components/Card.tsx
+  // Special files: package.json, index.html stay at root
+  const ROOT_FILES = new Set(['package.json', 'index.html', 'vite.config.js', 'vite.config.ts', 'tsconfig.json', 'postcss.config.js', 'tailwind.config.js', 'tailwind.config.ts'])
+
+  const rootFiles: ResolvedFile[] = []
+  const srcFiles: ResolvedFile[] = []
+
+  for (const f of resolved) {
+    const name = f.relPath
+    // Check if it's a known root-level file
+    const baseName = name.split('/').pop() || name
+    if (ROOT_FILES.has(baseName) && !name.includes('/')) {
+      rootFiles.push(f)
+    } else if (ROOT_FILES.has(name)) {
+      rootFiles.push(f)
+    } else {
+      // Strip leading src/ if present (avoid src/src/ nesting)
+      const stripped = name.startsWith('src/') ? name.slice(4) : name
+      srcFiles.push({ relPath: stripped, content: f.content })
+    }
+  }
+
+  // ── Step 3: Extract npm imports ──
   const npmPkgs = new Set<string>()
-  for (const f of flat) {
-    if (f.content && /\.(tsx?|jsx?|mjs)$/.test(f.name)) {
+  for (const f of srcFiles) {
+    if (/\.(tsx?|jsx?|mjs)$/.test(f.relPath) && f.content) {
       const importRegex = /import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([\w@/.-]+)['"]/g
       let m
       while ((m = importRegex.exec(f.content)) !== null) {
@@ -80,7 +133,8 @@ function buildFSTree(files: FileNode[]): Record<string, any> {
     }
   }
 
-  // Build package.json
+  // ── Step 4: Build package.json ──
+  const pkgFile = rootFiles.find(f => f.relPath === 'package.json')
   let packageJsonContent: string
   if (pkgFile?.content) {
     try {
@@ -106,18 +160,21 @@ function buildFSTree(files: FileNode[]): Record<string, any> {
     packageJsonContent = buildDefaultPackageJson(npmPkgs)
   }
 
-  const allCss = flat
-    .filter(f => f.name.endsWith('.css'))
-    .map(f => f.content || '')
+  // ── Step 5: Gather CSS for inline styles ──
+  const allCss = srcFiles
+    .filter(f => f.relPath.endsWith('.css'))
+    .map(f => f.content)
     .join('\n')
 
-  const hasMain = flat.some(f =>
-    f.name === 'main.tsx' || f.name === 'main.jsx' || f.name === 'index.tsx'
+  // ── Step 6: Check for entry points ──
+  const hasMain = srcFiles.some(f =>
+    f.relPath === 'main.tsx' || f.relPath === 'main.jsx' || f.relPath === 'index.tsx'
   )
-  const hasApp = flat.some(f =>
-    f.name === 'App.tsx' || f.name === 'App.jsx' || f.name === 'App.js'
+  const hasApp = srcFiles.some(f =>
+    f.relPath === 'App.tsx' || f.relPath === 'App.jsx' || f.relPath === 'App.js'
   )
 
+  // ── Step 7: Build WebContainer FS tree ──
   const tree: Record<string, any> = {
     'package.json': { file: { contents: packageJsonContent } },
     'vite.config.js': {
@@ -155,33 +212,26 @@ function buildFSTree(files: FileNode[]): Record<string, any> {
     }
   }
 
-  // Build src/ preserving folder structure
-  function buildSrcTree(nodes: FileNode[]): Record<string, any> {
-    const result: Record<string, any> = {}
-    for (const node of nodes) {
-      if (node.name === 'package.json' || node.name === 'index.html') continue
-      if (node.type === 'folder' && node.children) {
-        result[node.name] = { directory: buildSrcTree(node.children) }
-      } else if (node.type === 'file') {
-        if (node.name.includes('/')) {
-          const parts = node.name.split('/')
-          const fileName = parts.pop()!
-          let current = result
-          for (const dir of parts) {
-            if (!current[dir]) current[dir] = { directory: {} }
-            current = current[dir].directory
-          }
-          current[fileName] = { file: { contents: node.content || '' } }
-        } else {
-          result[node.name] = { file: { contents: node.content || '' } }
-        }
+  // Build src/ directory from resolved paths
+  const srcTree: Record<string, any> = {}
+
+  for (const f of srcFiles) {
+    const parts = f.relPath.split('/')
+    const fileName = parts.pop()!
+    let current = srcTree
+
+    // Create nested directories
+    for (const dir of parts) {
+      if (!current[dir]) {
+        current[dir] = { directory: {} }
       }
+      current = current[dir].directory
     }
-    return result
+
+    current[fileName] = { file: { contents: f.content } }
   }
 
-  const srcTree = buildSrcTree(files)
-
+  // Add main.tsx if not present but App exists
   if (!hasMain && hasApp) {
     srcTree['main.tsx'] = {
       file: {
@@ -196,6 +246,31 @@ function buildFSTree(files: FileNode[]): Record<string, any> {
           "  </React.StrictMode>",
           ")"
         ].join('\n')
+      }
+    }
+  }
+
+  // If no main.tsx and no App, create a minimal fallback
+  if (!hasMain && !hasApp && srcFiles.length > 0) {
+    // Try to find the "most likely" entry component
+    const firstTsx = srcFiles.find(f => f.relPath.endsWith('.tsx') || f.relPath.endsWith('.jsx'))
+    if (firstTsx) {
+      const componentName = firstTsx.relPath.replace(/\.(tsx|jsx)$/, '').split('/').pop() || 'App'
+      const importPath = './' + firstTsx.relPath.replace(/\.(tsx|jsx)$/, '')
+      srcTree['main.tsx'] = {
+        file: {
+          contents: [
+            "import React from 'react'",
+            "import ReactDOM from 'react-dom/client'",
+            `import ${componentName} from '${importPath}'`,
+            "",
+            `ReactDOM.createRoot(document.getElementById('root')!).render(`,
+            "  <React.StrictMode>",
+            `    <${componentName} />`,
+            "  </React.StrictMode>",
+            ")"
+          ].join('\n')
+        }
       }
     }
   }
@@ -299,12 +374,18 @@ function useXterm(containerEl: HTMLDivElement | null) {
 
 // ─── Preview Component ─────────────────────────────────────────────────────
 
-const PreviewPanel = React.memo(function PreviewPanel({ files, className }: PreviewPanelProps) {
+const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequestAIFix }: PreviewPanelProps) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<'idle' | 'booting' | 'installing' | 'starting' | 'ready' | 'error'>('idle')
   const [termOpen, setTermOpen] = useState(true)
   const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [isFixing, setIsFixing] = useState(false)
+
+  // Capture terminal output for error context (last N chars)
+  const terminalOutputRef = useRef('')
+  const MAX_ERROR_LOG = 4000
+  const [hasCompileError, setHasCompileError] = useState(false)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const containerRef = useRef<WebContainer | null>(null)
@@ -343,7 +424,7 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
     write(text + '\r\n', color)
   }, [write])
 
-  // ── Stream process output to xterm ──
+  // ── Stream process output to xterm + capture for error context ──
   const streamToTerminal = useCallback(async (process: any) => {
     const reader = process.output.getReader()
     try {
@@ -352,6 +433,16 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
         if (done) break
         const text = typeof value === 'string' ? value : new TextDecoder().decode(value)
         termRef.current?.write(text)
+        // Capture output for AI error fixing
+        terminalOutputRef.current += text
+        if (terminalOutputRef.current.length > MAX_ERROR_LOG * 2) {
+          terminalOutputRef.current = terminalOutputRef.current.slice(-MAX_ERROR_LOG)
+        }
+        // Detect Vite/TS compile errors even while server is running
+        const errorPatterns = /error TS|SyntaxError|ReferenceError|TypeError|Cannot find module|Failed to resolve|Module not found|Unexpected token|ENOENT/i
+        if (errorPatterns.test(text)) {
+          setHasCompileError(true)
+        }
       }
     } catch {
       // stream ended
@@ -428,6 +519,8 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
 
     const term = termRef.current!
     term.clear()
+    terminalOutputRef.current = '' // Reset error log on fresh boot
+    setHasCompileError(false)
 
     try {
       // Boot WebContainer
@@ -539,6 +632,7 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
           const fsTree = buildFSTree(files)
           await containerRef.current!.mount(fsTree)
           writeln('✓ Files synced (HMR)\r\n', 'green')
+          setHasCompileError(false) // Clear error state on successful sync
         } catch (err: any) {
           writeln(`✗ File sync failed: ${err.message}\r\n`, 'red')
         }
@@ -547,6 +641,17 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
       bootAndRun()
     }
   }, [filesHash, files, status, bootAndRun, writeln])
+
+  const handleAIFix = useCallback(async () => {
+    if (!onRequestAIFix) return
+    setIsFixing(true)
+    try {
+      const errorLog = terminalOutputRef.current.slice(-MAX_ERROR_LOG)
+      await onRequestAIFix(errorLog)
+    } finally {
+      setIsFixing(false)
+    }
+  }, [onRequestAIFix])
 
   const handleRefresh = useCallback(() => {
     if (iframeRef.current && previewUrl) {
@@ -625,6 +730,21 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Fix with AI — shown when compile errors detected */}
+          {hasCompileError && onRequestAIFix && status === 'ready' && (
+            <button
+              onClick={handleAIFix}
+              disabled={isFixing}
+              title="Fix errors with AI"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors disabled:opacity-50"
+            >
+              {isFixing ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> Fixing...</>
+              ) : (
+                <><Wand2 className="h-3 w-3" /> Fix with AI</>
+              )}
+            </button>
+          )}
           <button
             onClick={() => setTermOpen(!termOpen)}
             title="Toggle terminal"
@@ -704,12 +824,27 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className }: Prev
                   <AlertCircle className="h-6 w-6 text-red-400" />
                 </div>
                 <p className="text-sm text-red-300/80 font-mono max-w-[260px] leading-relaxed">{errMsg}</p>
-                <button
-                  onClick={handleRestart}
-                  className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/10 text-xs transition-colors"
-                >
-                  <RefreshCw className="h-3 w-3" /> Try again
-                </button>
+                <div className="flex items-center gap-2 mt-4">
+                  {onRequestAIFix && (
+                    <button
+                      onClick={handleAIFix}
+                      disabled={isFixing}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gradient-to-r from-violet-600/80 to-blue-600/80 hover:from-violet-600 hover:to-blue-600 text-white/90 hover:text-white text-xs font-medium transition-all disabled:opacity-50"
+                    >
+                      {isFixing ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> Fixing...</>
+                      ) : (
+                        <><Wand2 className="h-3 w-3" /> Fix with AI</>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleRestart}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/5 text-white/50 hover:text-white/80 hover:bg-white/10 text-xs transition-colors"
+                  >
+                    <RefreshCw className="h-3 w-3" /> Try again
+                  </button>
+                </div>
               </>
             ) : status === 'idle' ? (
               <>

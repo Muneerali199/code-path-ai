@@ -15,6 +15,10 @@ import {
   Contrast,
   Save,
   RotateCcw,
+  Eye,
+  EyeOff,
+  Key,
+  Shield,
 } from 'lucide-react';
 import { MCPServerProfile, useSettingsStore } from '@/store/settingsStore';
 import { NavigationContext } from '@/App';
@@ -217,39 +221,199 @@ const EditorSettings: React.FC = () => {
 const AISettings: React.FC = () => {
   const ai = useSettingsStore((state) => state.ai);
   const setAI = useSettingsStore((state) => state.setAI);
+  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
-  const models = [
-    { id: 'gpt-4', name: 'GPT-4', description: 'Most capable' },
-    { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast & efficient' },
-    { id: 'claude-3', name: 'Claude 3', description: 'Great for code' },
-    { id: 'codex', name: 'Codex', description: 'Code-specialized' },
-  ];
+  const toggleKeyVisibility = (providerId: string) => {
+    setShowKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
+  };
+
+  const updateProvider = (providerId: string, patch: Partial<{ enabled: boolean; apiKey: string; selectedModel: string }>) => {
+    const providers = ai.providers.map(p =>
+      p.id === providerId ? { ...p, ...patch } : p
+    );
+    setAI({ providers });
+  };
+
+  const setActiveProvider = (providerId: string) => {
+    setAI({ defaultProvider: providerId });
+  };
+
+  const providerIcons: Record<string, string> = {
+    openai: '🟢',
+    anthropic: '🟠',
+    google: '🔵',
+    groq: '⚡',
+    mistral: '🟣',
+    deepseek: '🐋',
+  };
 
   return (
     <div className="space-y-6">
+      {/* Active Provider Selector */}
       <div>
-        <h3 className="text-lg font-medium text-foreground mb-4">AI Model</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {models.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => setAI({ defaultModel: model.id })}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                ai.defaultModel === model.id
-                  ? 'border-primary bg-primary/10'
-                  : 'border-neural-border hover:border-gray-600'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-foreground">{model.name}</span>
-                {ai.defaultModel === model.id && <Check className="w-4 h-4 text-primary" />}
-              </div>
-              <div className="text-xs text-muted-foreground">{model.description}</div>
-            </button>
-          ))}
+        <h3 className="text-lg font-medium text-foreground mb-2">Active AI Provider</h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Select which AI provider to use. The built-in provider works out of the box.
+          To use others, add your API key below.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setActiveProvider('default')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              ai.defaultProvider === 'default'
+                ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                : 'border-neural-border hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Built-in (Default)
+              </span>
+              {ai.defaultProvider === 'default' && <Check className="w-4 h-4 text-primary" />}
+            </div>
+            <div className="text-xs text-muted-foreground">Mistral + GLM fallback — no API key needed</div>
+          </button>
+          {ai.providers.map((provider) => {
+            const hasKey = provider.apiKey.trim().length > 0;
+            return (
+              <button
+                key={provider.id}
+                onClick={() => {
+                  if (hasKey) {
+                    setActiveProvider(provider.id);
+                    updateProvider(provider.id, { enabled: true });
+                  }
+                }}
+                disabled={!hasKey}
+                className={`p-4 rounded-xl border text-left transition-all ${
+                  ai.defaultProvider === provider.id
+                    ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                    : hasKey
+                    ? 'border-neural-border hover:border-gray-600 cursor-pointer'
+                    : 'border-neural-border opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <span>{providerIcons[provider.id] || '🤖'}</span>
+                    {provider.name}
+                  </span>
+                  {ai.defaultProvider === provider.id && <Check className="w-4 h-4 text-primary" />}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {hasKey ? provider.models.find(m => m.id === provider.selectedModel)?.name || provider.selectedModel : 'Add API key to enable'}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Provider API Keys & Model Selection */}
+      <div>
+        <h3 className="text-lg font-medium text-foreground mb-2 flex items-center gap-2">
+          <Key className="w-5 h-5" />
+          Provider Configuration
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4">
+          Add your own API keys to use premium models. Keys are stored locally in your browser — never sent to our servers.
+        </p>
+        <div className="space-y-4">
+          {ai.providers.map((provider) => {
+            const hasKey = provider.apiKey.trim().length > 0;
+            const isActive = ai.defaultProvider === provider.id;
+            return (
+              <div
+                key={provider.id}
+                className={`p-4 rounded-xl border transition-all ${
+                  isActive
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-neural-border bg-neural-panel'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{providerIcons[provider.id] || '🤖'}</span>
+                    <span className="text-sm font-semibold text-foreground">{provider.name}</span>
+                    {isActive && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                        ACTIVE
+                      </span>
+                    )}
+                    {hasKey && !isActive && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">
+                        READY
+                      </span>
+                    )}
+                  </div>
+                  {hasKey && (
+                    <button
+                      onClick={() => {
+                        setActiveProvider(provider.id);
+                        updateProvider(provider.id, { enabled: true });
+                      }}
+                      className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-primary/20 text-primary'
+                          : 'bg-neural-input text-muted-foreground hover:text-foreground hover:bg-white/5'
+                      }`}
+                    >
+                      {isActive ? 'Active' : 'Use this'}
+                    </button>
+                  )}
+                </div>
+
+                {/* API Key Input */}
+                <div className="mb-3">
+                  <label className="text-xs text-muted-foreground mb-1.5 block">API Key</label>
+                  <div className="relative">
+                    <input
+                      type={showKeys[provider.id] ? 'text' : 'password'}
+                      value={provider.apiKey}
+                      onChange={(e) => updateProvider(provider.id, { apiKey: e.target.value })}
+                      placeholder={`Enter your ${provider.name} API key...`}
+                      className="w-full px-3 py-2 pr-10 bg-neural-input border border-neural-border rounded-lg text-foreground text-sm focus:outline-none focus:border-primary/50 font-mono"
+                    />
+                    <button
+                      onClick={() => toggleKeyVisibility(provider.id)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      {showKeys[provider.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Model Selection */}
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1.5 block">Model</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {provider.models.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={() => updateProvider(provider.id, { selectedModel: model.id })}
+                        className={`px-3 py-2 rounded-lg border text-left transition-all text-sm ${
+                          provider.selectedModel === model.id
+                            ? 'border-primary/50 bg-primary/10'
+                            : 'border-neural-border hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-foreground text-xs">{model.name}</span>
+                          {provider.selectedModel === model.id && <Check className="w-3 h-3 text-primary" />}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">{model.description}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Dual-AI Behavior */}
       <div>
         <h3 className="text-lg font-medium text-foreground mb-4">Dual-AI Behavior</h3>
         <div className="space-y-4">
@@ -293,6 +457,7 @@ const AISettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Advanced */}
       <div>
         <h3 className="text-lg font-medium text-foreground mb-4">Advanced</h3>
         <div className="grid grid-cols-2 gap-4">
