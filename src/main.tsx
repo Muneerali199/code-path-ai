@@ -15,6 +15,7 @@ const EditorPage = lazy(() => import('./pages/EditorPage.tsx'))
 const DocsPage = lazy(() => import('./pages/DocsPage.tsx'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage.tsx'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })))
+const SessionView = lazy(() => import('./pages/SessionView.tsx'))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -33,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
             <Route path="/docs" element={<DocsPage />} />
+            <Route path="/session/:sessionId" element={<SessionView />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/profile/:username" element={<ProfilePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

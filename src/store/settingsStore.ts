@@ -156,6 +156,102 @@ const createDefaultMcpServers = (serverUrl?: string): MCPServerProfile[] => ([
     kind: 'community',
     description: 'Drive + Sheets',
   },
+  {
+    id: 'supabase',
+    name: 'Supabase MCP',
+    url: '',
+    enabled: false,
+    kind: 'official',
+    description: 'Database, auth, storage, edge functions',
+  },
+  {
+    id: 'postgres',
+    name: 'PostgreSQL MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Direct Postgres queries & schema',
+  },
+  {
+    id: 'browser',
+    name: 'Browser / UI MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Browser automation & screenshots',
+  },
+  {
+    id: 'playwright',
+    name: 'Playwright MCP',
+    url: '',
+    enabled: false,
+    kind: 'official',
+    description: 'E2E testing & browser control',
+  },
+  {
+    id: 'github',
+    name: 'GitHub MCP',
+    url: '',
+    enabled: false,
+    kind: 'official',
+    description: 'Repos, issues, PRs, actions',
+  },
+  {
+    id: 'docker',
+    name: 'Docker MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Container management',
+  },
+  {
+    id: 'notion',
+    name: 'Notion MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Pages, databases, search',
+  },
+  {
+    id: 'linear',
+    name: 'Linear MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Issue tracking & projects',
+  },
+  {
+    id: 'figma',
+    name: 'Figma MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Design tokens & components',
+  },
+  {
+    id: 'sentry',
+    name: 'Sentry MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Error monitoring & traces',
+  },
+  {
+    id: 'sqlite',
+    name: 'SQLite MCP',
+    url: '',
+    enabled: false,
+    kind: 'reference',
+    description: 'Local SQLite databases',
+  },
+  {
+    id: 'puppeteer',
+    name: 'Puppeteer MCP',
+    url: '',
+    enabled: false,
+    kind: 'community',
+    description: 'Headless Chrome automation',
+  },
 ]);
 
 const defaultSettings = {
@@ -191,6 +287,9 @@ const defaultSettings = {
         models: [
           { id: 'gpt-4o', name: 'GPT-4o', description: 'Most capable, multimodal' },
           { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast & affordable' },
+          { id: 'o3-mini', name: 'o3-mini', description: 'Advanced reasoning, fast' },
+          { id: 'o1', name: 'o1', description: 'Deep reasoning' },
+          { id: 'o1-mini', name: 'o1-mini', description: 'Efficient reasoning' },
           { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'High capability + vision' },
           { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', description: 'Fast & efficient' },
         ],
@@ -204,6 +303,8 @@ const defaultSettings = {
         baseUrl: 'https://api.anthropic.com/v1',
         models: [
           { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Best for coding' },
+          { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', description: 'Most capable' },
+          { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', description: 'Great balance' },
           { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku', description: 'Fast & cheap' },
         ],
         selectedModel: 'claude-sonnet-4-20250514',
@@ -216,8 +317,10 @@ const defaultSettings = {
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
         models: [
           { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast multimodal' },
-          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Long context' },
+          { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Ultra fast, low cost' },
+          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'Long context (2M)' },
           { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Fastest' },
+          { id: 'gemini-2.5-pro-preview-06-05', name: 'Gemini 2.5 Pro', description: 'Most capable' },
         ],
         selectedModel: 'gemini-2.0-flash',
       },
@@ -229,8 +332,10 @@ const defaultSettings = {
         baseUrl: 'https://api.groq.com/openai/v1',
         models: [
           { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Best open-source' },
+          { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Ultra fast' },
           { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B', description: 'Fast MoE model' },
           { id: 'gemma2-9b-it', name: 'Gemma 2 9B', description: 'Compact & capable' },
+          { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Llama 70B', description: 'Reasoning via Groq' },
         ],
         selectedModel: 'llama-3.3-70b-versatile',
       },
@@ -242,8 +347,10 @@ const defaultSettings = {
         baseUrl: 'https://api.mistral.ai/v1',
         models: [
           { id: 'mistral-large-latest', name: 'Mistral Large', description: 'Most powerful' },
+          { id: 'mistral-medium-latest', name: 'Mistral Medium', description: 'Balanced' },
           { id: 'mistral-small-latest', name: 'Mistral Small', description: 'Fast & efficient' },
           { id: 'codestral-latest', name: 'Codestral', description: 'Code-specialized' },
+          { id: 'open-mistral-nemo', name: 'Mistral Nemo', description: 'Open-weight 12B' },
         ],
         selectedModel: 'mistral-small-latest',
       },
@@ -254,10 +361,33 @@ const defaultSettings = {
         apiKey: '',
         baseUrl: 'https://api.deepseek.com/v1',
         models: [
+          { id: 'deepseek-chat', name: 'DeepSeek V3', description: 'Most capable, general purpose' },
           { id: 'deepseek-coder', name: 'DeepSeek Coder', description: 'Code generation' },
-          { id: 'deepseek-chat', name: 'DeepSeek Chat', description: 'General purpose' },
+          { id: 'deepseek-reasoner', name: 'DeepSeek R1', description: 'Deep reasoning' },
         ],
-        selectedModel: 'deepseek-coder',
+        selectedModel: 'deepseek-chat',
+      },
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        enabled: false,
+        apiKey: '',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        models: [
+          { id: 'openai/gpt-4o', name: 'GPT-4o (via OR)', description: 'OpenAI flagship' },
+          { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (via OR)', description: 'Fast & cheap' },
+          { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4 (via OR)', description: 'Anthropic coding' },
+          { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet (via OR)', description: 'Anthropic balanced' },
+          { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (via OR)', description: 'Google fast' },
+          { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro (via OR)', description: 'Google flagship' },
+          { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B (via OR)', description: 'Meta open-source' },
+          { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3 (via OR)', description: 'DeepSeek latest' },
+          { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1 (via OR)', description: 'Reasoning' },
+          { id: 'mistralai/mistral-large-2411', name: 'Mistral Large (via OR)', description: 'Mistral flagship' },
+          { id: 'qwen/qwen-2.5-coder-32b-instruct', name: 'Qwen 2.5 Coder 32B (via OR)', description: 'Alibaba code model' },
+          { id: 'cohere/command-r-plus', name: 'Command R+ (via OR)', description: 'Cohere flagship' },
+        ],
+        selectedModel: 'anthropic/claude-sonnet-4',
       },
     ],
     defaultModel: 'mistral-small-latest',
@@ -322,7 +452,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'codementor-settings',
-      version: 3,
+      version: 4,
       migrate: (state, version) => {
         const nextState = state as SettingsState;
         if (version < 2) {
@@ -347,7 +477,6 @@ export const useSettingsStore = create<SettingsState>()(
             ...nextState,
             ai: {
               ...defaultSettings.ai,
-              // Preserve user's existing behavioral settings
               collaborationMode: currentAi?.collaborationMode ?? defaultSettings.ai.collaborationMode,
               autoSuggest: currentAi?.autoSuggest ?? defaultSettings.ai.autoSuggest,
               suggestOnType: currentAi?.suggestOnType ?? defaultSettings.ai.suggestOnType,
@@ -356,6 +485,34 @@ export const useSettingsStore = create<SettingsState>()(
               completionDelay: currentAi?.completionDelay ?? defaultSettings.ai.completionDelay,
               maxTokens: currentAi?.maxTokens ?? defaultSettings.ai.maxTokens,
               temperature: currentAi?.temperature ?? defaultSettings.ai.temperature,
+            },
+          };
+        }
+        if (version < 4) {
+          // Migrate v3 → v4: add OpenRouter provider, expanded models, new MCP servers
+          const currentAi = (nextState?.ai ?? defaultSettings.ai) as any;
+          const currentMcp = (nextState?.mcp ?? defaultSettings.mcp) as any;
+          // Preserve user's existing API keys for old providers
+          const preservedProviders = defaultSettings.ai.providers.map(dp => {
+            const existing = currentAi?.providers?.find((p: any) => p.id === dp.id);
+            if (existing?.apiKey) {
+              return { ...dp, apiKey: existing.apiKey, enabled: existing.enabled, selectedModel: existing.selectedModel || dp.selectedModel };
+            }
+            return dp;
+          });
+          // Merge MCP servers — keep user customizations, add new defaults
+          const existingServerIds = new Set((currentMcp?.servers || []).map((s: any) => s.id));
+          const newServers = defaultSettings.mcp.servers.filter(s => !existingServerIds.has(s.id));
+          const mergedServers = [...(currentMcp?.servers || []), ...newServers];
+          return {
+            ...nextState,
+            ai: {
+              ...currentAi,
+              providers: preservedProviders,
+            },
+            mcp: {
+              ...currentMcp,
+              servers: mergedServers,
             },
           };
         }

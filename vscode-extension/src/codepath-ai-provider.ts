@@ -1119,6 +1119,7 @@ ${commonMistake.trim()}`;
         const actions = [
             { cmd: 'explainCode',  icon: '💡', title: 'Explain Code',   desc: 'Understand any code selection', color: 'var(--green)' },
             { cmd: 'generateCode', icon: '⚡', title: 'Generate Code',  desc: 'Create code from a description', color: 'var(--accent)' },
+            { cmd: 'generateProject', icon: '🧱', title: 'Generate App/Web', desc: 'Full project from a prompt', color: 'var(--teal)' },
             { cmd: 'debugCode',    icon: '🐛', title: 'Debug Code',     desc: 'Find and fix bugs in your code', color: 'var(--red)' },
             { cmd: 'analyzeCode',  icon: '🔎', title: 'Analyze Code',   desc: 'Security, performance & quality', color: 'var(--orange)' },
             { cmd: 'refactorCode', icon: '🔄', title: 'Refactor Code',  desc: 'Improve structure & readability', color: 'var(--purple)' },
@@ -1368,5 +1369,246 @@ ${commonMistake.trim()}`;
         `;
 
         return wrapInLayout('CodePath AI Dashboard', body);
+    }
+
+    private buildProjectPrompt(form: GenerateProjectForm): string {
+        const sections: string[] = [];
+        const push = (label: string, value?: string) => {
+            if (value && value.trim().length > 0) {
+                sections.push(`${label}: ${value.trim()}`);
+            }
+        };
+
+        push('Project type', form.projectType);
+        push('Platform', form.platform);
+        push('Framework', form.framework);
+        push('Language', form.language);
+        push('Styling', form.styling);
+        push('State management', form.state);
+        push('Pages/Routes', form.pages);
+        push('Features', form.features);
+        push('API/Data', form.data);
+        push('Authentication', form.auth);
+        push('Testing', form.tests);
+        push('Deployment', form.deployment);
+        push('Additional requirements', form.additional);
+
+        const details = sections.length > 0 ? sections.join('\n') : 'Use sensible defaults.';
+
+        return [
+            'Generate a complete, runnable project based on the following requirements.',
+            '',
+            details,
+            '',
+            'Output format requirements:',
+            '1) Provide a project tree (folders and files).',
+            '2) Provide complete file contents using Markdown code blocks.',
+            '3) Include setup and run instructions.',
+            '4) Keep the output deterministic and minimal while still complete.'
+        ].join('\n');
+    }
+
+    private async openGeneratedDocument(content: string): Promise<void> {
+        const doc = await vscode.workspace.openTextDocument({
+            content: content || '',
+            language: 'markdown'
+        });
+        await vscode.window.showTextDocument(doc, { preview: false });
+    }
+
+    private getGenerateProjectHtml(): string {
+        const body = `
+            <style>
+                .gen-hero {
+                    text-align: center;
+                    padding: 20px 16px 10px;
+                }
+                .gen-hero h1 {
+                    font-size: 1.4rem;
+                    margin-bottom: 6px;
+                }
+                .gen-hero p { color: var(--text-muted); font-size: 0.86rem; }
+                .form-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    gap: 12px;
+                }
+                .form-field label {
+                    display: block;
+                    font-size: 0.8rem;
+                    color: var(--text-secondary);
+                    margin-bottom: 6px;
+                }
+                .form-field input, .form-field textarea, .form-field select {
+                    width: 100%;
+                    background: var(--bg-code);
+                    border: 1px solid var(--border-subtle);
+                    color: var(--text-primary);
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    font-family: var(--font-sans);
+                    font-size: 0.9rem;
+                }
+                .form-field textarea { min-height: 90px; resize: vertical; }
+                .actions-row {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                    margin-top: 16px;
+                }
+                .status {
+                    margin-top: 10px;
+                    font-size: 0.82rem;
+                    color: var(--text-muted);
+                    min-height: 18px;
+                }
+            </style>
+
+            <div class="gen-hero">
+                <h1>Generate App/Web</h1>
+                <p>Describe what you want. We will generate a full project structure and code.</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Project Details</div>
+                <div class="card">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label>Project Type</label>
+                            <select id="projectType">
+                                <option>Web App</option>
+                                <option>Mobile App</option>
+                                <option>Backend API</option>
+                                <option>CLI Tool</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>Platform</label>
+                            <input id="platform" placeholder="e.g., browser, iOS/Android, server" />
+                        </div>
+                        <div class="form-field">
+                            <label>Framework</label>
+                            <input id="framework" placeholder="e.g., React, Next.js, Flutter, Express" />
+                        </div>
+                        <div class="form-field">
+                            <label>Language</label>
+                            <input id="language" placeholder="e.g., TypeScript, JavaScript, Dart" />
+                        </div>
+                        <div class="form-field">
+                            <label>Styling/UI</label>
+                            <input id="styling" placeholder="e.g., Tailwind, CSS Modules, Material UI" />
+                        </div>
+                        <div class="form-field">
+                            <label>State Management</label>
+                            <input id="state" placeholder="e.g., Redux, Zustand, Riverpod" />
+                        </div>
+                        <div class="form-field">
+                            <label>Pages / Routes</label>
+                            <input id="pages" placeholder="e.g., Home, Dashboard, Settings" />
+                        </div>
+                        <div class="form-field">
+                            <label>Core Features</label>
+                            <input id="features" placeholder="e.g., auth, CRUD, search, charts" />
+                        </div>
+                        <div class="form-field">
+                            <label>API / Data</label>
+                            <input id="data" placeholder="e.g., REST API, Firebase, local JSON" />
+                        </div>
+                        <div class="form-field">
+                            <label>Auth</label>
+                            <input id="auth" placeholder="e.g., JWT, OAuth, none" />
+                        </div>
+                        <div class="form-field">
+                            <label>Testing</label>
+                            <input id="tests" placeholder="e.g., Jest, Playwright, none" />
+                        </div>
+                        <div class="form-field">
+                            <label>Deployment</label>
+                            <input id="deployment" placeholder="e.g., Vercel, Netlify, Docker" />
+                        </div>
+                    </div>
+                    <div class="form-field" style="margin-top:12px;">
+                        <label>Additional Requirements</label>
+                        <textarea id="additional" placeholder="Any constraints, edge cases, or special requests"></textarea>
+                    </div>
+                    <div class="actions-row">
+                        <button class="btn btn-secondary" onclick="fillTemplate()">Fill Example</button>
+                        <button class="btn btn-primary" onclick="submit()">Generate Project</button>
+                    </div>
+                    <div class="status" id="status"></div>
+                </div>
+            </div>
+
+            <script>
+                const vscode = acquireVsCodeApi();
+                function val(id) { return document.getElementById(id).value; }
+                function submit() {
+                    const payload = {
+                        projectType: val('projectType'),
+                        platform: val('platform'),
+                        framework: val('framework'),
+                        language: val('language'),
+                        styling: val('styling'),
+                        state: val('state'),
+                        pages: val('pages'),
+                        features: val('features'),
+                        data: val('data'),
+                        auth: val('auth'),
+                        tests: val('tests'),
+                        deployment: val('deployment'),
+                        additional: val('additional')
+                    };
+                    vscode.postMessage({ command: 'submitGenerateProject', payload });
+                }
+                function fillTemplate() {
+                    document.getElementById('projectType').value = 'Web App';
+                    document.getElementById('platform').value = 'Browser';
+                    document.getElementById('framework').value = 'React + Vite';
+                    document.getElementById('language').value = 'TypeScript';
+                    document.getElementById('styling').value = 'Tailwind CSS';
+                    document.getElementById('state').value = 'Zustand';
+                    document.getElementById('pages').value = 'Home, Dashboard, Settings';
+                    document.getElementById('features').value = 'Auth, CRUD, charts';
+                    document.getElementById('data').value = 'Mock API with JSON';
+                    document.getElementById('auth').value = 'Email/password';
+                    document.getElementById('tests').value = 'Jest';
+                    document.getElementById('deployment').value = 'Vercel';
+                    document.getElementById('additional').value = 'Include README and basic error handling.';
+                }
+                window.addEventListener('message', (event) => {
+                    const msg = event.data;
+                    if (msg.command === 'setStatus') {
+                        document.getElementById('status').textContent = msg.status || '';
+                    }
+                });
+            </script>
+        `;
+
+        return wrapInLayout('Generate App/Web', body);
+    }
+
+    private getGenerateProjectResultHtml(content: string, modelUsed?: string): string {
+        const rendered = markdownToHtml(content || 'No content returned.');
+        const body = `
+            ${panelHeader('ðŸ§±', 'Generated Project', 'Full app/web scaffold', modelUsed)}
+            <div class="section">
+                <div class="section-title">Output</div>
+                <div class="card">${rendered}</div>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button class="btn btn-secondary" onclick="openInNewFile()">Open in New File</button>
+                <button class="btn btn-secondary" onclick="insertInEditor()">Insert in Editor</button>
+                <button class="btn btn-primary" onclick="openGenerator()">Generate Another</button>
+            </div>
+            <script>
+                const vscode = acquireVsCodeApi();
+                const content = ${JSON.stringify(content || '')};
+                function openInNewFile() { vscode.postMessage({ command: 'openInNewFile', content }); }
+                function insertInEditor() { vscode.postMessage({ command: 'insertInEditor', content }); }
+                function openGenerator() { vscode.postMessage({ command: 'openGenerator' }); }
+            </script>
+        `;
+
+        return wrapInLayout('Generated Project', body);
     }
 }

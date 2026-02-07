@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
 import {
@@ -120,46 +120,79 @@ function SessionCard({ session, detail }: { session: SessionSummary; detail: Cod
   const duration = session.duration_seconds
   const minutes = Math.floor(duration / 60)
 
+  // Derive session status
+  const hasOutput = changes.some(c => c.after?.trim().length > 0)
+  const sessionStatus = total === 0
+    ? 'No Activity'
+    : hasOutput && detail?.ended_at ? 'Completed'
+    : !hasOutput ? 'Abandoned'
+    : 'Exploratory'
+
+  const statusColors: Record<string, string> = {
+    'Completed': 'bg-emerald-500/10 text-emerald-300/70 border-emerald-500/20',
+    'Abandoned': 'bg-amber-500/10 text-amber-300/70 border-amber-500/20',
+    'Exploratory': 'bg-sky-500/10 text-sky-300/70 border-sky-500/20',
+    'No Activity': 'bg-white/[0.04] text-white/30 border-white/[0.08]',
+  }
+
   return (
     <div className="bg-white/[0.03] border border-white/[0.06] rounded-lg overflow-hidden">
-      <button onClick={() => setExpanded(!expanded)} className="w-full text-left p-4 hover:bg-white/[0.02] transition-colors">
-        <div className="flex items-center justify-between mb-1.5">
-          <h4 className="text-[13px] font-medium text-white/70">{session.title}</h4>
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              'text-[9px] px-1.5 py-0.5 rounded border',
-              aiLevel === 'Low' ? 'bg-green-500/10 text-green-300/70 border-green-500/20' :
-              aiLevel === 'Medium' ? 'bg-amber-500/10 text-amber-300/70 border-amber-500/20' :
-              aiLevel === 'High' ? 'bg-red-500/10 text-red-300/70 border-red-500/20' :
-              'bg-white/[0.04] text-white/30 border-white/[0.08]'
-            )}>
-              AI: {aiLevel}
-            </span>
-            <svg className={cn('w-3.5 h-3.5 text-white/20 transition-transform', expanded && 'rotate-180')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-[10px] text-white/25">
-          <span>{new Date(session.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-          <span>·</span>
-          <span>{minutes > 0 ? `${minutes} min` : '<1 min'}</span>
-          <span>·</span>
-          <span>{session.change_count} changes</span>
-        </div>
-        {session.skills.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {session.skills.slice(0, 5).map((skill, i) => (
-              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300/60 border border-violet-500/15">
-                {skill}
+      <div className="flex items-stretch">
+        <button onClick={() => setExpanded(!expanded)} className="flex-1 text-left p-4 hover:bg-white/[0.02] transition-colors">
+          <div className="flex items-center justify-between mb-1.5">
+            <h4 className="text-[13px] font-medium text-white/70">{session.title}</h4>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'text-[9px] px-1.5 py-0.5 rounded border',
+                statusColors[sessionStatus]
+              )}>
+                {sessionStatus}
               </span>
-            ))}
-            {session.skills.length > 5 && (
-              <span className="text-[9px] text-white/15">+{session.skills.length - 5}</span>
-            )}
+              <span className={cn(
+                'text-[9px] px-1.5 py-0.5 rounded border',
+                aiLevel === 'Low' ? 'bg-green-500/10 text-green-300/70 border-green-500/20' :
+                aiLevel === 'Medium' ? 'bg-amber-500/10 text-amber-300/70 border-amber-500/20' :
+                aiLevel === 'High' ? 'bg-red-500/10 text-red-300/70 border-red-500/20' :
+                'bg-white/[0.04] text-white/30 border-white/[0.08]'
+              )}>
+                AI: {aiLevel}
+              </span>
+              <svg className={cn('w-3.5 h-3.5 text-white/20 transition-transform', expanded && 'rotate-180')} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
           </div>
-        )}
-      </button>
+          <div className="flex items-center gap-3 text-[10px] text-white/25">
+            <span>{new Date(session.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            <span>·</span>
+            <span>{minutes > 0 ? `${minutes} min` : '<1 min'}</span>
+            <span>·</span>
+            <span>{session.change_count} changes</span>
+          </div>
+          {session.skills.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {session.skills.slice(0, 5).map((skill, i) => (
+                <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-300/60 border border-violet-500/15">
+                  {skill}
+                </span>
+              ))}
+              {session.skills.length > 5 && (
+                <span className="text-[9px] text-white/15">+{session.skills.length - 5}</span>
+              )}
+            </div>
+          )}
+        </button>
+        {/* View full session link */}
+        <Link
+          to={`/session/${session.id}`}
+          className="flex items-center px-3 border-l border-white/[0.06] text-white/15 hover:text-violet-400/70 hover:bg-violet-500/[0.04] transition-colors"
+          title="View full session"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </Link>
+      </div>
 
       {expanded && detail && (
         <div className="border-t border-white/[0.06] px-4 py-3 space-y-3">
@@ -1003,26 +1036,45 @@ export default function ProfilePage() {
         <section>
           <SectionLabel icon="sessions">Verified Sessions</SectionLabel>
           <p className="text-[10px] text-white/20 mb-3">Real, timestamped development work</p>
-          {sessions.length > 0 ? (
-            <div className="space-y-2">
-              {sessions.slice(0, 10).map(session => (
-                <SessionCard
-                  key={session.id}
-                  session={session}
-                  detail={sessionDetails[session.id] || null}
-                />
-              ))}
-              {sessions.length > 10 && (
-                <p className="text-[11px] text-white/15 text-center pt-2">
-                  +{sessions.length - 10} older sessions
+          {(() => {
+            // Filter: only show sessions with at least 1 change (meaningful work)
+            const meaningfulSessions = sessions.filter(s => s.change_count > 0)
+            const hiddenCount = sessions.length - meaningfulSessions.length
+
+            if (meaningfulSessions.length > 0) {
+              return (
+                <div className="space-y-2">
+                  {meaningfulSessions.slice(0, 10).map(session => (
+                    <SessionCard
+                      key={session.id}
+                      session={session}
+                      detail={sessionDetails[session.id] || null}
+                    />
+                  ))}
+                  {meaningfulSessions.length > 10 && (
+                    <p className="text-[11px] text-white/15 text-center pt-2">
+                      +{meaningfulSessions.length - 10} older sessions
+                    </p>
+                  )}
+                  {hiddenCount > 0 && (
+                    <p className="text-[10px] text-white/10 text-center pt-1">
+                      {hiddenCount} empty session{hiddenCount !== 1 ? 's' : ''} hidden
+                    </p>
+                  )}
+                </div>
+              )
+            }
+
+            return (
+              <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-6 text-center">
+                <p className="text-[12px] text-white/25">
+                  {sessions.length > 0
+                    ? 'No sessions with code activity yet. Sessions without edits are hidden.'
+                    : 'No sessions recorded yet. Start coding to build your history.'}
                 </p>
-              )}
-            </div>
-          ) : (
-            <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-6 text-center">
-              <p className="text-[12px] text-white/25">No sessions recorded yet. Start coding to build your history.</p>
-            </div>
-          )}
+              </div>
+            )
+          })()}
         </section>
 
         {/* ━━ Verification Footer ━━━━━━━━━━━━━━━━━━━━━ */}

@@ -295,6 +295,54 @@ async function callGemini(
   };
 }
 
+// ── OpenRouter call — OpenAI-compatible but with extra headers ──
+async function callOpenRouter(
+  provider: AIProviderConfig,
+  systemPrompt: string,
+  userMessage: string,
+  messages?: { role: string; content: string }[],
+  settings?: { maxTokens: number; temperature: number }
+): Promise<AIResponse> {
+  const chatMessages: { role: string; content: string }[] = [
+    { role: 'system', content: systemPrompt },
+  ];
+
+  if (messages?.length) {
+    chatMessages.push(...messages);
+  } else {
+    chatMessages.push({ role: 'user', content: userMessage });
+  }
+
+  const res = await fetch(`${provider.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${provider.apiKey}`,
+      'HTTP-Referer': window.location.origin,
+      'X-Title': 'CodePath AI',
+    },
+    body: JSON.stringify({
+      model: provider.selectedModel,
+      messages: chatMessages,
+      max_tokens: settings?.maxTokens ?? 4096,
+      temperature: settings?.temperature ?? 0.7,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`OpenRouter API error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  return {
+    response: data.choices?.[0]?.message?.content || '',
+    model: data.model || provider.selectedModel,
+    provider: `OpenRouter (${data.model || provider.selectedModel})`,
+    usage: data.usage || {},
+  };
+}
+
 // ── Route to the correct provider ──
 async function callProvider(
   provider: AIProviderConfig,
@@ -308,6 +356,8 @@ async function callProvider(
       return callAnthropic(provider, systemPrompt, userMessage, messages, settings);
     case 'google':
       return callGemini(provider, systemPrompt, userMessage, messages, settings);
+    case 'openrouter':
+      return callOpenRouter(provider, systemPrompt, userMessage, messages, settings);
     // OpenAI, Groq, Mistral, DeepSeek all use OpenAI-compatible API
     default:
       return callOpenAICompatible(provider, systemPrompt, userMessage, messages, settings);

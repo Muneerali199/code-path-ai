@@ -13,6 +13,7 @@ const routeImportMap: Record<string, () => Promise<unknown>> = {
   '/settings': () => import('@/pages/SettingsPage'),
   '/docs': () => import('@/pages/DocsPage'),
   '/profile': () => import('@/pages/ProfilePage'),
+  '/session': () => import('@/pages/SessionView'),
 };
 
 const prefetched = new Set<string>();

@@ -17,6 +17,7 @@
   "activationEvents": [
     "onCommand:codepath-ai.explainCode",
     "onCommand:codepath-ai.generateCode",
+    "onCommand:codepath-ai.generateProject",
     "onCommand:codepath-ai.debugCode",
     "onCommand:codepath-ai.analyzeCode",
     "onCommand:codepath-ai.refactorCode",
@@ -38,6 +39,10 @@
       {
         "command": "codepath-ai.generateCode",
         "title": "CodePath: Generate Code"
+      },
+      {
+        "command": "codepath-ai.generateProject",
+        "title": "CodePath: Generate App/Web"
       },
       {
         "command": "codepath-ai.debugCode",
@@ -76,6 +81,11 @@
           "group": "codepath-ai@0"
         },
         {
+          "command": "codepath-ai.generateProject",
+          "when": "editorTextFocus",
+          "group": "codepath-ai@0.5"
+        },
+        {
           "command": "codepath-ai.explainCode",
           "when": "editorHasSelection",
           "group": "codepath-ai@1"
@@ -99,6 +109,10 @@
       "commandPalette": [
         {
           "command": "codepath-ai.generateCode",
+          "when": "true"
+        },
+        {
+          "command": "codepath-ai.generateProject",
           "when": "true"
         },
         {

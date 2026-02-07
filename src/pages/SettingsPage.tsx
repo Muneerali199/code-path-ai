@@ -61,6 +61,7 @@ const providerMeta: Record<string, { icon: string; color: string; docsUrl: strin
   groq: { icon: '⚡', color: 'text-yellow-400', docsUrl: 'https://console.groq.com/keys' },
   mistral: { icon: '🟣', color: 'text-purple-400', docsUrl: 'https://console.mistral.ai/api-keys' },
   deepseek: { icon: '🐋', color: 'text-cyan-400', docsUrl: 'https://platform.deepseek.com/api_keys' },
+  openrouter: { icon: '🔀', color: 'text-rose-400', docsUrl: 'https://openrouter.ai/keys' },
 };
 
 // ─── Toggle Switch ──────────────────────────────────────────────────
@@ -127,6 +128,22 @@ const AIModelSettings: React.FC<{ onDirty: () => void }> = ({ onDirty }) => {
             'x-api-key': provider.apiKey,
             'anthropic-version': '2023-06-01',
             'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify({
+            model: provider.selectedModel,
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+          }),
+        });
+        ok = res.ok;
+      } else if (provider.id === 'openrouter') {
+        const res = await fetch(`${provider.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${provider.apiKey}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'CodePath AI',
           },
           body: JSON.stringify({
             model: provider.selectedModel,
