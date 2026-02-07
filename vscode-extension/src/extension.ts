@@ -39,6 +39,10 @@ export function activate(context: vscode.ExtensionContext) {
         await aiProvider.handleClearUserApiKey();
     });
 
+    const openDashboardCommand = vscode.commands.registerCommand('codepath-ai.openDashboard', async () => {
+        await aiProvider.handleOpenDashboard();
+    });
+
     // Add all disposables to context
     context.subscriptions.push(
         explainCodeCommand,
@@ -48,7 +52,8 @@ export function activate(context: vscode.ExtensionContext) {
         refactorCodeCommand,
         selectModelCommand,
         setUserApiKeyCommand,
-        clearUserApiKeyCommand
+        clearUserApiKeyCommand,
+        openDashboardCommand
     );
 }
 

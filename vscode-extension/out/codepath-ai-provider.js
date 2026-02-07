@@ -29,6 +29,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CodePathAIProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const axios_1 = __importDefault(require("axios"));
+const webview_styles_1 = require("./webview-styles");
 class CodePathAIProvider {
     constructor(context) {
         this.context = context;
@@ -51,6 +52,26 @@ class CodePathAIProvider {
         const provider = config.get('provider') || undefined;
         return { model, provider };
     }
+    isLocalBackend() {
+        try {
+            const url = new URL(this.backendUrl);
+            return url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
+        }
+        catch {
+            return this.backendUrl.includes('localhost') || this.backendUrl.includes('127.0.0.1');
+        }
+    }
+    getBackendApiKey() {
+        const configKey = vscode.workspace.getConfiguration('codepath-ai').get('apiKey') || '';
+        if (configKey) {
+            return configKey;
+        }
+        if (this.isLocalBackend()) {
+            // Matches backend default dev key in api-key-auth.service.ts
+            return 'cp_dev_key_default_for_testing_purpose';
+        }
+        return '';
+    }
     async getUserApiKey() {
         const secret = await this.context.secrets.get('codepath-ai.userApiKey');
         if (secret) {
@@ -59,10 +80,24 @@ class CodePathAIProvider {
         const configFallback = vscode.workspace.getConfiguration('codepath-ai').get('userApiKey');
         return configFallback || undefined;
     }
+    getRequestTimeoutMs(fallback) {
+        const configured = vscode.workspace.getConfiguration('codepath-ai').get('requestTimeoutMs');
+        if (typeof configured === 'number' && configured > 0) {
+            return configured;
+        }
+        return fallback;
+    }
     async sendRequest(request) {
         try {
             const { model, provider } = this.getSelectedModel();
             const userApiKey = await this.getUserApiKey();
+            const backendApiKey = this.getBackendApiKey();
+            if (!backendApiKey) {
+                return {
+                    success: false,
+                    error: 'Missing backend API key. Set "codepath-ai.apiKey" in settings.'
+                };
+            }
             if (provider === 'nvidia') {
                 return await this.sendNimRequest(request, model, userApiKey);
             }
@@ -76,14 +111,20 @@ class CodePathAIProvider {
             }, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${vscode.workspace.getConfiguration('codepath-ai').get('apiKey') || ''}`
+                    'Authorization': `Bearer ${backendApiKey}`
                 },
-                timeout: 30000 // 30 second timeout
+                timeout: this.getRequestTimeoutMs(30000)
             });
             return response.data;
         }
         catch (error) {
             console.error('Error communicating with CodePath backend:', error);
+            if (error?.code === 'ECONNABORTED') {
+                return {
+                    success: false,
+                    error: 'Request timed out. Try a smaller request or increase "codepath-ai.requestTimeoutMs" in settings.'
+                };
+            }
             return {
                 success: false,
                 error: error.response?.data?.error || error.message || 'Unknown error occurred'
@@ -112,7 +153,7 @@ class CodePathAIProvider {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${userApiKey}`
                 },
-                timeout: 60000
+                timeout: this.getRequestTimeoutMs(60000)
             });
             const content = response.data?.choices?.[0]?.message?.content;
             if (!content) {
@@ -121,6 +162,12 @@ class CodePathAIProvider {
             return { success: true, data: { response: content }, modelUsed: model || 'moonshotai/kimi-k2.5' };
         }
         catch (error) {
+            if (error?.code === 'ECONNABORTED') {
+                return {
+                    success: false,
+                    error: 'Request timed out. Try a smaller request or increase "codepath-ai.requestTimeoutMs" in settings.'
+                };
+            }
             return {
                 success: false,
                 error: error.response?.data?.error || error.message || 'Unknown error occurred'
@@ -195,10 +242,14 @@ class CodePathAIProvider {
     }
     async fetchModelsFromBackend() {
         try {
+            const backendApiKey = this.getBackendApiKey();
+            if (!backendApiKey) {
+                return null;
+            }
             const response = await axios_1.default.get(`${this.backendUrl}/ai/vscode/models`, {
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${vscode.workspace.getConfiguration('codepath-ai').get('apiKey') || ''}`
+                    'Authorization': `Bearer ${backendApiKey}`
                 },
                 timeout: 10000
             });
@@ -272,8 +323,7 @@ class CodePathAIProvider {
             const response = await this.sendRequest(request);
             progress.report({ increment: 100, message: 'Formatting response...' });
             if (response.success && response.data) {
-                // Show the explanation in an output channel or new document
-                this.showExplanation(response.data.explanation || response.data.response);
+                this.showExplanation(response.data.explanation || response.data.response, response.modelUsed);
             }
             else {
                 vscode.window.showErrorMessage(`Error: ${response.error || 'Unknown error occurred'}`);
@@ -370,7 +420,7 @@ class CodePathAIProvider {
             const response = await this.sendRequest(request);
             progress.report({ increment: 100, message: 'Formatting solution...' });
             if (response.success && response.data) {
-                this.showDebugSolution(response.data.solution || response.data.response);
+                this.showDebugSolution(response.data.solution || response.data.response, response.modelUsed);
             }
             else {
                 vscode.window.showErrorMessage(`Error: ${response.error || 'Unknown error occurred'}`);
@@ -428,7 +478,7 @@ class CodePathAIProvider {
             const response = await this.sendRequest(request);
             progress.report({ increment: 100, message: 'Formatting analysis...' });
             if (response.success && response.data) {
-                this.showAnalysisResults(response.data);
+                this.showAnalysisResults(response.data, response.modelUsed);
             }
             else {
                 vscode.window.showErrorMessage(`Error: ${response.error || 'Unknown error occurred'}`);
@@ -500,44 +550,123 @@ class CodePathAIProvider {
         const range = new vscode.Range(new vscode.Position(endLine + 1, 0), new vscode.Position(end, editor.document.lineAt(end).range.end.character));
         return editor.document.getText(range);
     }
-    showExplanation(explanation) {
-        const panel = vscode.window.createWebviewPanel('codepathExplanation', 'CodePath Explanation', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = this.getExplanationHtml(explanation);
+    showExplanation(explanation, modelUsed) {
+        const panel = vscode.window.createWebviewPanel('codepathExplanation', 'CodePath Explanation', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+        const formattedExplanation = this.formatExplanationConcisely(explanation);
+        panel.webview.html = this.getExplanationHtml(formattedExplanation, modelUsed);
     }
-    getExplanationHtml(content) {
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>CodePath Explanation</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    pre { background-color: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                    code { font-family: 'Courier New', monospace; }
-                    h3 { color: #007acc; }
-                </style>
-            </head>
-            <body>
-                <h3>CodePath AI Explanation</h3>
-                <div>${this.formatAsMarkdown(content)}</div>
-            </body>
-            </html>
+    formatExplanationConcisely(originalExplanation) {
+        // This function transforms the explanation into a concise format
+        // with the structure: What it does, Why it works, Remember, Common mistakes
+        // Extract key information from the original explanation
+        const lines = originalExplanation.split('\n').filter(line => line.trim() !== '');
+        // Basic heuristic to identify different parts of the explanation
+        let whatItDoes = '';
+        let whyItWorks = '';
+        let remember = '';
+        let commonMistake = '';
+        // Look for keywords that might indicate different sections
+        let foundWhat = false;
+        let foundWhy = false;
+        let foundRemember = false;
+        let foundMistake = false;
+        for (const line of lines) {
+            const lowerLine = line.toLowerCase();
+            if (!foundWhat && (lowerLine.includes('purpose') || lowerLine.includes('does') || lowerLine.includes('function'))) {
+                whatItDoes += line + ' ';
+                foundWhat = true;
+            }
+            else if (!foundWhy && (lowerLine.includes('why') || lowerLine.includes('works') || lowerLine.includes('because') || lowerLine.includes('since'))) {
+                whyItWorks += line + ' ';
+                foundWhy = true;
+            }
+            else if (!foundRemember && (lowerLine.includes('important') || lowerLine.includes('remember') || lowerLine.includes('key'))) {
+                remember += line + ' ';
+                foundRemember = true;
+            }
+            else if (!foundMistake && (lowerLine.includes('error') || lowerLine.includes('mistake') || lowerLine.includes('common') || lowerLine.includes('problem'))) {
+                commonMistake += line + ' ';
+                foundMistake = true;
+            }
+            else if (!foundWhat) {
+                // If we haven't found the "what" section yet, use the first meaningful line
+                whatItDoes += line + ' ';
+            }
+        }
+        // If we couldn't extract specific sections, use the first part of the explanation for "what it does"
+        if (!whatItDoes) {
+            whatItDoes = lines.length > 0 ? lines[0] : originalExplanation.substring(0, 100) + '...';
+        }
+        // Fill in defaults if sections weren't found
+        if (!whyItWorks) {
+            whyItWorks = 'This code implements the specified functionality using standard patterns.';
+        }
+        if (!remember) {
+            remember = 'Pay attention to the syntax and parameters used.';
+        }
+        if (!commonMistake) {
+            commonMistake = 'Common mistakes include syntax errors or incorrect parameter usage.';
+        }
+        // Format the explanation in the new concise style
+        return `✅ **What this does**
+${whatItDoes.trim()}
+
+🧠 **Why it works**
+${whyItWorks.trim()}
+
+📌 **Remember**
+${remember.trim()}
+
+⚠️ **Common mistake**
+${commonMistake.trim()}`;
+    }
+    getExplanationHtml(content, modelUsed) {
+        const body = `
+            ${(0, webview_styles_1.panelHeader)('💡', 'Code Explanation', 'AI-powered code understanding', modelUsed)}
+            <div class="animate-in delay-1">
+                ${this.renderConciseExplanation(content)}
+            </div>
         `;
+        return (0, webview_styles_1.wrapInLayout)('CodePath Explanation', body);
     }
-    formatAsMarkdown(text) {
-        // Simple markdown formatting for the webview
-        let formatted = text
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
-            .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
-            .replace(/`(.*?)`/g, '<code>$1</code>') // Inline code
-            .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>'); // Code blocks
-        // Convert newlines to paragraphs
-        formatted = formatted.replace(/\n\n/g, '</p><p>');
-        formatted = `<p>${formatted}</p>`;
-        formatted = formatted.replace(/<p><\/p>/g, '');
-        return formatted;
+    renderConciseExplanation(content) {
+        // Parse the concise sections
+        const sections = content.split(/\n\n/).filter(s => s.trim());
+        let html = '';
+        const sectionStyles = {
+            'what this does': { icon: '✅', color: 'var(--green)', bg: 'var(--green-dim)' },
+            'why it works': { icon: '🧠', color: 'var(--accent)', bg: 'var(--accent-dim)' },
+            'remember': { icon: '📌', color: 'var(--yellow)', bg: 'var(--yellow-dim)' },
+            'common mistake': { icon: '⚠️', color: 'var(--orange)', bg: 'var(--orange-dim)' },
+        };
+        for (const section of sections) {
+            let matched = false;
+            for (const [key, style] of Object.entries(sectionStyles)) {
+                if (section.toLowerCase().includes(key)) {
+                    const lines = section.split('\n');
+                    const title = lines[0].replace(/\*\*/g, '').replace(/[✅🧠📌⚠️]/g, '').trim();
+                    const body = lines.slice(1).join('\n').trim();
+                    html += `
+                        <div class="card" style="border-left: 3px solid ${style.color};">
+                            <div class="card-header">
+                                <div class="icon" style="background: ${style.bg}; color: ${style.color};">${style.icon}</div>
+                                <h4>${title}</h4>
+                            </div>
+                            <div style="color: var(--text-secondary); padding-left: 42px;">${(0, webview_styles_1.markdownToHtml)(body)}</div>
+                        </div>
+                    `;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                html += `<div class="card">${(0, webview_styles_1.markdownToHtml)(section)}</div>`;
+            }
+        }
+        return html;
+    }
+    formatAsMarkdownHtml(text) {
+        return (0, webview_styles_1.markdownToHtml)(text);
     }
     async insertGeneratedCode(code) {
         const editor = vscode.window.activeTextEditor;
@@ -546,93 +675,437 @@ class CodePathAIProvider {
         }
         // Insert at cursor position or end of document
         const position = editor.selection.active;
-        await editor.edit(editBuilder => {
+        await editor.edit((editBuilder) => {
             editBuilder.insert(position, '\n' + code);
         });
     }
-    showDebugSolution(solution) {
-        const panel = vscode.window.createWebviewPanel('codepathDebugSolution', 'CodePath Debug Solution', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = this.getDebugSolutionHtml(solution);
+    showDebugSolution(solution, modelUsed) {
+        const panel = vscode.window.createWebviewPanel('codepathDebugSolution', 'CodePath Debug Solution', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+        panel.webview.html = this.getDebugSolutionHtml(solution, modelUsed);
     }
-    getDebugSolutionHtml(content) {
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>CodePath Debug Solution</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    pre { background-color: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                    code { font-family: 'Courier New', monospace; }
-                    h3 { color: #d73a49; }
-                    .solution { margin-top: 20px; }
-                </style>
-            </head>
-            <body>
-                <h3>CodePath AI Debug Solution</h3>
-                <div class="solution">${this.formatAsMarkdown(content)}</div>
-            </body>
-            </html>
+    getDebugSolutionHtml(content, modelUsed) {
+        const body = `
+            ${(0, webview_styles_1.panelHeader)('🐛', 'Debug Solution', 'AI-powered debugging assistant', modelUsed)}
+            <div class="animate-in delay-1">
+                <div class="card" style="border-left: 3px solid var(--red);">
+                    <div class="card-header">
+                        <div class="icon" style="background: var(--red-dim); color: var(--red);">🔍</div>
+                        <h4>Diagnosis & Fix</h4>
+                    </div>
+                    <div style="padding-left: 42px; color: var(--text-secondary);">
+                        ${(0, webview_styles_1.markdownToHtml)(content)}
+                    </div>
+                </div>
+            </div>
         `;
+        return (0, webview_styles_1.wrapInLayout)('CodePath Debug Solution', body);
     }
-    showAnalysisResults(results) {
-        const panel = vscode.window.createWebviewPanel('codepathAnalysis', 'CodePath Analysis Results', vscode.ViewColumn.One, { enableScripts: true });
-        panel.webview.html = this.getAnalysisHtml(results);
+    showAnalysisResults(results, modelUsed) {
+        const panel = vscode.window.createWebviewPanel('codepathAnalysis', 'CodePath Analysis Results', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+        panel.webview.html = this.getAnalysisHtml(results, modelUsed);
     }
-    getAnalysisHtml(results) {
+    getAnalysisHtml(results, modelUsed) {
         let findingsHtml = '';
         if (results.findings && Array.isArray(results.findings)) {
-            findingsHtml = results.findings.map((finding) => `
-                <div style="margin-bottom: 15px; padding: 10px; border-left: 3px solid ${this.getSeverityColor(finding.severity)};">
-                    <h4 style="margin: 0 0 5px 0; color: ${this.getSeverityColor(finding.severity)};">${finding.issue || 'Issue'}</h4>
-                    <p><strong>Severity:</strong> ${finding.severity || 'Unknown'}</p>
-                    <p><strong>Recommendation:</strong> ${finding.recommendation || 'No recommendation provided'}</p>
-                    ${finding.example ? `<details><summary>Example</summary><pre>${finding.example}</pre></details>` : ''}
-                </div>
-            `).join('');
+            findingsHtml = results.findings.map((finding, i) => {
+                const severity = (finding.severity || 'info').toLowerCase();
+                const badgeClass = severity === 'high' ? 'high' : severity === 'medium' ? 'medium' : severity === 'low' ? 'low' : 'info';
+                const borderColor = this.getSeverityColor(severity);
+                return `
+                    <div class="card animate-in delay-${Math.min(i + 1, 4)}" style="border-left: 3px solid ${borderColor};">
+                        <div class="card-header">
+                            <div class="icon" style="background: ${borderColor}20; color: ${borderColor};">
+                                ${severity === 'high' ? '🔴' : severity === 'medium' ? '🟠' : severity === 'low' ? '🟡' : '🔵'}
+                            </div>
+                            <h4 style="flex:1;">${finding.issue || 'Issue'}</h4>
+                            <span class="badge ${badgeClass}">${finding.severity || 'Info'}</span>
+                        </div>
+                        <div style="padding-left: 42px; color: var(--text-secondary);">
+                            <p><strong>Recommendation:</strong> ${finding.recommendation || 'No recommendation provided'}</p>
+                            ${finding.example ? `<details><summary>View Example</summary><pre><div class="code-header"><span class="lang-badge">example</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div><code>${finding.example}</code></pre></details>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
         else {
-            findingsHtml = `<p>${results.analysis || results.response || 'Analysis results not available'}</p>`;
+            findingsHtml = `<div class="card">${(0, webview_styles_1.markdownToHtml)(results.analysis || results.response || 'Analysis results not available')}</div>`;
         }
-        return `
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>CodePath Analysis Results</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    pre { background-color: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                    code { font-family: 'Courier New', monospace; }
-                    h3 { color: #005fb8; }
-                    details { margin: 10px 0; }
-                    summary { cursor: pointer; font-weight: bold; }
-                </style>
-            </head>
-            <body>
-                <h3>CodePath AI Analysis Results</h3>
-                <div>${findingsHtml}</div>
-            </body>
-            </html>
+        // Summary counts
+        let summaryHtml = '';
+        if (results.findings && Array.isArray(results.findings)) {
+            const counts = { high: 0, medium: 0, low: 0, other: 0 };
+            results.findings.forEach((f) => {
+                const s = (f.severity || '').toLowerCase();
+                if (s === 'high') {
+                    counts.high++;
+                }
+                else if (s === 'medium') {
+                    counts.medium++;
+                }
+                else if (s === 'low') {
+                    counts.low++;
+                }
+                else {
+                    counts.other++;
+                }
+            });
+            summaryHtml = `
+                <div class="grid grid-3 animate-in" style="margin-bottom: 20px;">
+                    <div class="card" style="text-align:center; border-top: 3px solid var(--red); padding: 16px;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: var(--red);">${counts.high}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">High Severity</div>
+                    </div>
+                    <div class="card" style="text-align:center; border-top: 3px solid var(--orange); padding: 16px;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: var(--orange);">${counts.medium}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Medium Severity</div>
+                    </div>
+                    <div class="card" style="text-align:center; border-top: 3px solid var(--yellow); padding: 16px;">
+                        <div style="font-size: 1.8rem; font-weight: 700; color: var(--yellow);">${counts.low + counts.other}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Low / Info</div>
+                    </div>
+                </div>
+            `;
+        }
+        const body = `
+            ${(0, webview_styles_1.panelHeader)('🔎', 'Analysis Results', 'Code quality & security analysis', modelUsed)}
+            ${summaryHtml}
+            <div class="section">
+                <div class="section-title">Findings</div>
+                ${findingsHtml}
+            </div>
         `;
+        return (0, webview_styles_1.wrapInLayout)('CodePath Analysis Results', body);
     }
     getSeverityColor(severity) {
         switch (severity?.toLowerCase()) {
-            case 'high': return '#d73a49'; // Red
-            case 'medium': return '#f66a0a'; // Orange
-            case 'low': return '#ffd33d'; // Yellow
-            default: return '#005fb8'; // Blue
+            case 'high': return 'var(--red)';
+            case 'medium': return 'var(--orange)';
+            case 'low': return 'var(--yellow)';
+            default: return 'var(--accent)';
         }
     }
     async applyRefactoring(refactoredCode, editor, selection) {
         // Replace the selected code with the refactored version
-        await editor.edit(editBuilder => {
+        await editor.edit((editBuilder) => {
             editBuilder.replace(selection, refactoredCode);
         });
         vscode.window.showInformationMessage('Code refactored successfully!');
+    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Dashboard Panel
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    async handleOpenDashboard() {
+        const panel = vscode.window.createWebviewPanel('codepathDashboard', 'CodePath AI Dashboard', vscode.ViewColumn.One, { enableScripts: true, retainContextWhenHidden: true });
+        const { model, provider } = this.getSelectedModel();
+        const models = await this.getModelOptions();
+        panel.webview.html = this.getDashboardHtml(model, provider, models);
+        // Handle messages from webview
+        panel.webview.onDidReceiveMessage(async (msg) => {
+            switch (msg.command) {
+                case 'selectModel':
+                    await this.handleSelectModel();
+                    // Refresh dashboard with new model
+                    const updated = this.getSelectedModel();
+                    panel.webview.html = this.getDashboardHtml(updated.model, updated.provider, models);
+                    break;
+                case 'setApiKey':
+                    await this.handleSetUserApiKey();
+                    break;
+                case 'explainCode':
+                    await this.handleExplainCode();
+                    break;
+                case 'generateCode':
+                    await this.handleGenerateCode();
+                    break;
+                case 'debugCode':
+                    await this.handleDebugCode();
+                    break;
+                case 'analyzeCode':
+                    await this.handleAnalyzeCode();
+                    break;
+                case 'refactorCode':
+                    await this.handleRefactorCode();
+                    break;
+                case 'openSettings':
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'codepath-ai');
+                    break;
+            }
+        });
+    }
+    getDashboardHtml(currentModel, currentProvider, models) {
+        const modelDisplayName = currentModel || 'Not selected';
+        const providerName = currentProvider || 'N/A';
+        const modelCards = (models || this.getFallbackModels()).map(m => {
+            const isActive = m.id === currentModel;
+            const categoryColors = {
+                trending: 'var(--accent)',
+                china: 'var(--teal)',
+                other: 'var(--purple)',
+            };
+            const color = categoryColors[m.category] || 'var(--text-muted)';
+            return `
+                <div class="model-card ${isActive ? 'active' : ''}" title="${m.id}">
+                    <div class="model-card-status">
+                        <span class="status-dot" style="background: ${isActive ? 'var(--green)' : 'var(--text-muted)'};"></span>
+                    </div>
+                    <div class="model-card-info">
+                        <div class="model-name">${m.label}</div>
+                        <div class="model-provider">${m.provider}</div>
+                    </div>
+                    <span class="badge" style="background: ${color}20; color: ${color};">${m.category}</span>
+                </div>
+            `;
+        }).join('');
+        const actions = [
+            { cmd: 'explainCode', icon: '💡', title: 'Explain Code', desc: 'Understand any code selection', color: 'var(--green)' },
+            { cmd: 'generateCode', icon: '⚡', title: 'Generate Code', desc: 'Create code from a description', color: 'var(--accent)' },
+            { cmd: 'debugCode', icon: '🐛', title: 'Debug Code', desc: 'Find and fix bugs in your code', color: 'var(--red)' },
+            { cmd: 'analyzeCode', icon: '🔎', title: 'Analyze Code', desc: 'Security, performance & quality', color: 'var(--orange)' },
+            { cmd: 'refactorCode', icon: '🔄', title: 'Refactor Code', desc: 'Improve structure & readability', color: 'var(--purple)' },
+        ];
+        const actionCards = actions.map((a, i) => `
+            <button class="action-card animate-in delay-${Math.min(i + 1, 4)}" onclick="sendCommand('${a.cmd}')">
+                <div class="action-icon" style="background: ${a.color}18; color: ${a.color};">${a.icon}</div>
+                <div class="action-info">
+                    <div class="action-title">${a.title}</div>
+                    <div class="action-desc">${a.desc}</div>
+                </div>
+                <span class="action-arrow">→</span>
+            </button>
+        `).join('');
+        const body = `
+            <style>
+                /* ── Dashboard-specific styles ──────── */
+                .dash-hero {
+                    text-align: center;
+                    padding: 36px 20px 28px;
+                    margin-bottom: 8px;
+                }
+                .dash-hero .hero-logo {
+                    width: 64px; height: 64px;
+                    background: linear-gradient(135deg, var(--accent), var(--purple));
+                    border-radius: 16px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1.8rem;
+                    font-weight: 700;
+                    color: var(--bg-primary);
+                    box-shadow: 0 4px 20px rgba(137, 180, 250, 0.3);
+                    margin-bottom: 16px;
+                }
+                .dash-hero h1 {
+                    font-size: 1.6rem;
+                    background: linear-gradient(135deg, var(--accent), var(--purple));
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    margin-bottom: 6px;
+                }
+                .dash-hero .tagline { color: var(--text-muted); font-size: 0.88rem; }
+
+                /* ── Status bar ─────────────────────── */
+                .status-bar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 20px;
+                    flex-wrap: wrap;
+                    margin-bottom: 32px;
+                }
+                .status-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    background: var(--bg-surface);
+                    border: 1px solid var(--border-subtle);
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    font-size: 0.82rem;
+                    color: var(--text-secondary);
+                }
+                .status-item .dot {
+                    width: 8px; height: 8px;
+                    border-radius: 50%;
+                    background: var(--green);
+                    box-shadow: 0 0 6px var(--green);
+                }
+
+                /* ── Action cards ───────────────────── */
+                .action-card {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    width: 100%;
+                    background: var(--bg-surface);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: var(--radius-md);
+                    padding: 16px 18px;
+                    margin-bottom: 10px;
+                    cursor: pointer;
+                    transition: all var(--transition);
+                    font-family: var(--font-sans);
+                    text-align: left;
+                    color: var(--text-primary);
+                }
+                .action-card:hover {
+                    border-color: var(--accent);
+                    background: var(--bg-surface-hover);
+                    box-shadow: var(--shadow-sm);
+                    transform: translateX(4px);
+                }
+                .action-icon {
+                    width: 42px; height: 42px;
+                    border-radius: var(--radius-sm);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 1.2rem;
+                    flex-shrink: 0;
+                }
+                .action-info { flex: 1; }
+                .action-title { font-weight: 600; font-size: 0.92rem; }
+                .action-desc { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+                .action-arrow {
+                    font-size: 1.1rem;
+                    color: var(--text-muted);
+                    opacity: 0;
+                    transform: translateX(-4px);
+                    transition: all var(--transition);
+                }
+                .action-card:hover .action-arrow { opacity: 1; transform: translateX(0); }
+
+                /* ── Model cards ────────────────────── */
+                .models-scroll {
+                    max-height: 260px;
+                    overflow-y: auto;
+                    padding-right: 4px;
+                }
+                .model-card {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px 14px;
+                    border-radius: var(--radius-sm);
+                    transition: background var(--transition);
+                    cursor: default;
+                }
+                .model-card:hover { background: var(--bg-surface-hover); }
+                .model-card.active {
+                    background: var(--accent-dim);
+                    border: 1px solid rgba(137, 180, 250, 0.2);
+                    border-radius: var(--radius-sm);
+                }
+                .model-card-status { flex-shrink: 0; }
+                .status-dot { width: 8px; height: 8px; border-radius: 50%; display: block; }
+                .model-card-info { flex: 1; min-width: 0; }
+                .model-name { font-size: 0.85rem; font-weight: 500; }
+                .model-provider { font-size: 0.72rem; color: var(--text-muted); }
+
+                /* ── Footer ─────────────────────────── */
+                .dash-footer {
+                    display: flex;
+                    justify-content: center;
+                    gap: 10px;
+                    margin-top: 28px;
+                    padding-top: 20px;
+                    border-top: 1px solid var(--border-subtle);
+                }
+
+                /* ── Keyboard shortcuts ─────────────── */
+                .shortcut-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 8px;
+                    margin-top: 10px;
+                }
+                .shortcut-item {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 8px 12px;
+                    background: var(--bg-surface);
+                    border-radius: var(--radius-sm);
+                    font-size: 0.8rem;
+                }
+                .shortcut-item .label { color: var(--text-secondary); }
+                .kbd {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    background: var(--bg-code);
+                    border: 1px solid var(--border-subtle);
+                    border-radius: 4px;
+                    font-family: var(--font-mono);
+                    font-size: 0.72rem;
+                    color: var(--text-muted);
+                    box-shadow: 0 1px 0 var(--bg-secondary);
+                }
+            </style>
+
+            <!-- Hero -->
+            <div class="dash-hero animate-in">
+                <div class="hero-logo">CP</div>
+                <h1>CodePath AI</h1>
+                <p class="tagline">Your intelligent coding assistant — powered by multi-model AI</p>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="status-bar animate-in delay-1">
+                <div class="status-item">
+                    <span class="dot"></span>
+                    <span><strong>Model:</strong> ${modelDisplayName}</span>
+                </div>
+                <div class="status-item">
+                    <span><strong>Provider:</strong> ${providerName}</span>
+                </div>
+                <div class="status-item" style="cursor: pointer;" onclick="sendCommand('selectModel')">
+                    🔄 Change Model
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="section animate-in delay-2">
+                <div class="section-title">Quick Actions</div>
+                ${actionCards}
+            </div>
+
+            <!-- Models Overview -->
+            <div class="section animate-in delay-3">
+                <div class="section-title">Available Models</div>
+                <div class="card">
+                    <div class="models-scroll">
+                        ${modelCards}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyboard Shortcuts -->
+            <div class="section animate-in delay-4">
+                <div class="section-title">Tips</div>
+                <div class="card">
+                    <div class="shortcut-grid">
+                        <div class="shortcut-item"><span class="label">Select code →</span> <span>Right-click context menu</span></div>
+                        <div class="shortcut-item"><span class="label">Command Palette</span> <span class="kbd">Ctrl+Shift+P</span></div>
+                        <div class="shortcut-item"><span class="label">Switch Model</span> <span><em>CodePath: Select Model</em></span></div>
+                        <div class="shortcut-item"><span class="label">Set API Key</span> <span><em>CodePath: Set User API Key</em></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="dash-footer animate-in delay-4">
+                <button class="btn btn-secondary" onclick="sendCommand('setApiKey')">🔑 Set API Key</button>
+                <button class="btn btn-secondary" onclick="sendCommand('openSettings')">⚙️ Settings</button>
+            </div>
+
+            <script>
+                const vscode = acquireVsCodeApi();
+                function sendCommand(cmd) {
+                    vscode.postMessage({ command: cmd });
+                }
+            </script>
+        `;
+        return (0, webview_styles_1.wrapInLayout)('CodePath AI Dashboard', body);
     }
 }
 exports.CodePathAIProvider = CodePathAIProvider;

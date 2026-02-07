@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { callMistralAI } from '@/services/aiService';
 
 export interface AIMessage {
   id: string;
@@ -109,22 +110,6 @@ export const useAIStore = create<AIState>((set, get) => ({
       timestamp: new Date(),
     };
 
-    // Gather MCP context from workspace
-    const mcpContext = {
-      currentFile: get().context.currentFile,
-      projectContext: get().context.projectContext,
-      availableComponents: ['Header', 'TaskList', 'TaskItem', 'AddTaskForm'],
-      availableHooks: ['useLocalStorage'],
-      projectStructure: {
-        components: 'React components with TypeScript',
-        hooks: 'Custom React hooks',
-        types: 'TypeScript interfaces and types',
-        styles: 'CSS with modern features'
-      }
-    };
-
-    const BACKEND_URL = 'http://localhost:3001/ai/chat';
-
     if (role === 'sage') {
       set({ sageMessages: [...get().sageMessages, message], sageStatus: 'thinking' });
       try {
@@ -136,29 +121,25 @@ export const useAIStore = create<AIState>((set, get) => ({
           isStreaming: true,
         };
         
-        // Add empty message that will be streamed to
         set({ sageMessages: [...get().sageMessages, aiMessage], sageStatus: 'responding' });
 
-        const response = await fetch(BACKEND_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const data = await callMistralAI({
+          message: content,
+          mode: 'explain',
+          messages: get().sageMessages
+            .filter(m => m.id !== aiMessage.id)
+            .map(m => ({ 
+              role: m.role === 'sage' ? 'assistant' : m.role === 'user' ? 'user' : 'system', 
+              content: m.content 
+            })),
+          context: {
+            currentFile: get().context.currentFile,
+            currentFileContent: get().context.selectedCode,
+            selectedCode: get().context.selectedCode,
+            projectContext: get().context.projectContext,
           },
-          body: JSON.stringify({
-            message: content,
-            provider: 'mistral',
-            mode: 'explain',
-            messages: [
-              ...get().sageMessages.map(m => ({ 
-                role: m.role === 'sage' ? 'assistant' : m.role === 'user' ? 'user' : 'system', 
-                content: m.content 
-              })),
-              { role: 'user', content }
-            ]
-          })
         });
 
-        const data = await response.json();
         const aiContent = data.response || 'I couldn\'t generate a response.';
 
         // Stream the text character by character
@@ -166,7 +147,6 @@ export const useAIStore = create<AIState>((set, get) => ({
         for (let i = 0; i < aiContent.length; i++) {
           displayText += aiContent[i];
           
-          // Update message content
           set({
             sageMessages: get().sageMessages.map(msg =>
               msg.id === aiMessage.id
@@ -175,17 +155,25 @@ export const useAIStore = create<AIState>((set, get) => ({
             ),
           });
           
-          // Add delay for typing effect (faster for code, slower for text)
           const char = aiContent[i];
           const delay = /[a-zA-Z0-9]/.test(char) ? 10 : /[.!?,]/.test(char) ? 30 : 5;
-          
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
         set({ sageStatus: 'idle' });
       } catch (error) {
         console.error('Sage Error:', error);
-        set({ sageStatus: 'idle' });
+        // Add error message to chat
+        const errorMsg: AIMessage = {
+          id: (Date.now() + 2).toString(),
+          role: 'sage',
+          content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+          timestamp: new Date(),
+        };
+        set({ 
+          sageMessages: [...get().sageMessages.filter(m => !m.isStreaming || m.content), errorMsg],
+          sageStatus: 'idle' 
+        });
       }
     } else {
       set({ forgeMessages: [...get().forgeMessages, message], forgeStatus: 'thinking' });
@@ -199,29 +187,25 @@ export const useAIStore = create<AIState>((set, get) => ({
           codeBlocks: [],
         };
         
-        // Add empty message that will be streamed to
         set({ forgeMessages: [...get().forgeMessages, aiMessage], forgeStatus: 'generating' });
 
-        const response = await fetch(BACKEND_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const data = await callMistralAI({
+          message: content,
+          mode: 'create',
+          messages: get().forgeMessages
+            .filter(m => m.id !== aiMessage.id)
+            .map(m => ({ 
+              role: m.role === 'forge' ? 'assistant' : m.role === 'user' ? 'user' : 'system', 
+              content: m.content 
+            })),
+          context: {
+            currentFile: get().context.currentFile,
+            currentFileContent: get().context.selectedCode,
+            selectedCode: get().context.selectedCode,
+            projectContext: get().context.projectContext,
           },
-          body: JSON.stringify({
-            message: content,
-            provider: 'mistral',
-            mode: 'create',
-            messages: [
-              ...get().forgeMessages.map(m => ({ 
-                role: m.role === 'forge' ? 'assistant' : m.role === 'user' ? 'user' : 'system', 
-                content: m.content 
-              })),
-              { role: 'user', content }
-            ]
-          })
         });
 
-        const data = await response.json();
         const aiContent = data.response || 'I couldn\'t generate code.';
 
         // Stream the text character by character
@@ -229,7 +213,6 @@ export const useAIStore = create<AIState>((set, get) => ({
         for (let i = 0; i < aiContent.length; i++) {
           displayText += aiContent[i];
           
-          // Update message content
           set({
             forgeMessages: get().forgeMessages.map(msg =>
               msg.id === aiMessage.id
@@ -238,17 +221,24 @@ export const useAIStore = create<AIState>((set, get) => ({
             ),
           });
           
-          // Add delay for typing effect (faster for code, slower for text)
           const char = aiContent[i];
           const delay = /[a-zA-Z0-9]/.test(char) ? 10 : /[.!?,]/.test(char) ? 30 : 5;
-          
           await new Promise(resolve => setTimeout(resolve, delay));
         }
         
         set({ forgeStatus: 'idle' });
       } catch (error) {
         console.error('Forge Error:', error);
-        set({ forgeStatus: 'idle' });
+        const errorMsg: AIMessage = {
+          id: (Date.now() + 2).toString(),
+          role: 'forge',
+          content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
+          timestamp: new Date(),
+        };
+        set({ 
+          forgeMessages: [...get().forgeMessages.filter(m => !m.isStreaming || m.content), errorMsg],
+          forgeStatus: 'idle' 
+        });
       }
     }
   },

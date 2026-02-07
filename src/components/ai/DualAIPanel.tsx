@@ -63,12 +63,13 @@ export const DualAIPanel: React.FC = () => {
           >
             <GitMerge className="w-3.5 h-3.5" />
           </button>
-          <button className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+          <button className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors" title="Settings">
             <Settings className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={toggleAIPanel}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+            title="Close AI Panel"
           >
             <X className="w-3.5 h-3.5" />
           </button>

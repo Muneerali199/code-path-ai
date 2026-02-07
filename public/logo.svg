@@ -1,9 +1,21 @@
-<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="32" height="32" rx="6" fill="#0F172A"/>
-  <path d="M8 10L16 6L24 10L16 14L8 10Z" fill="#38BDF8"/>
-  <path d="M8 16L16 12L24 16L16 20L8 16Z" fill="#0EA5E9"/>
-  <path d="M8 22L16 18L24 22L16 26L8 22Z" fill="#0284C7"/>
-  <path d="M16 6V26" stroke="#0EA5E9" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M8 10L8 22" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round"/>
-  <path d="M24 10L24 22" stroke="#38BDF8" stroke-width="1.5" stroke-linecap="round"/>
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#09090f"/>
+  
+  <!-- Path/bracket left -->
+  <path d="M32 40C32 40 32 52 44 64C56 76 44 88 44 88" stroke="#a78bfa" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Path/bracket right -->
+  <path d="M96 40C96 40 96 52 84 64C72 76 84 88 84 88" stroke="#a78bfa" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Arrow/path center -->
+  <g>
+    <!-- Forward slash -->
+    <path d="M56 48L72 80" stroke="#06b6d4" stroke-width="5" stroke-linecap="round"/>
+    <!-- Arrow head -->
+    <path d="M68 76L76 88L64 84" fill="#06b6d4"/>
+  </g>
+  
+  <!-- CP text initials overlay (optional, subtle) -->
+  <text x="64" y="108" font-size="16" font-weight="bold" text-anchor="middle" fill="#a78bfa" font-family="monospace">CP</text>
 </svg>

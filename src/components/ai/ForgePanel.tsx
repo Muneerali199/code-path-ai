@@ -16,9 +16,12 @@ import {
   X,
   Copy,
   Loader2,
+  FolderPlus,
+  Package,
 } from 'lucide-react';
 import { useAIStore, type AIMessage, type CodeSuggestion } from '@/store/aiStore';
 import { useEditorStore } from '@/store/editorStore';
+import { FileGenerationService } from '@/services/fileGeneration';
 
 interface ForgePanelProps {
   compact?: boolean;
@@ -28,9 +31,12 @@ const TypingCursor: React.FC = () => (
   <span className="inline-block w-2 h-5 ml-1 bg-forge/60 animate-pulse rounded-sm" />
 );
 
-const MessageBubble: React.FC<{ message: AIMessage }> = ({ message }) => {
+const MessageBubble: React.FC<{ message: AIMessage; onApplyFiles?: (content: string) => void }> = ({ message, onApplyFiles }) => {
   const isUser = message.role === 'user';
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  
+  // Check if message has code blocks that can be applied as files
+  const hasCodeBlocks = !isUser && !message.isStreaming && /```\w+:[^\n]+\n[\s\S]*?```/.test(message.content);
 
   const copyToClipboard = (code: string, id: string) => {
     navigator.clipboard.writeText(code);
@@ -146,9 +152,10 @@ const MessageBubble: React.FC<{ message: AIMessage }> = ({ message }) => {
                 ol: ({ node, ...props }) => (
                   <ol className="list-decimal list-inside space-y-2 my-3 text-sm leading-relaxed" {...props} />
                 ),
-                li: ({ node, ...props }) => (
-                  <li className="text-gray-300 leading-relaxed pl-1" {...props} />
-                ),
+                li: ({ node, ...props }) => {
+                  // Wrap standalone li in ul to fix a11y
+                  return <li className="text-gray-300 leading-relaxed pl-1" {...props} />;
+                },
                 // Paragraphs
                 p: ({ node, ...props }) => (
                   <p className="text-sm text-gray-300 leading-relaxed my-3" {...props} />
@@ -178,6 +185,15 @@ const MessageBubble: React.FC<{ message: AIMessage }> = ({ message }) => {
               {message.content}
             </ReactMarkdown>
             {message.isStreaming && <TypingCursor />}
+            {hasCodeBlocks && onApplyFiles && (
+              <button
+                onClick={() => onApplyFiles(message.content)}
+                className="mt-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-forge/20 border border-forge/40 text-forge text-xs font-medium hover:bg-forge/30 transition-colors"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                Apply Files to Editor
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -236,7 +252,7 @@ const SuggestionCard: React.FC<{
 
 export const ForgePanel: React.FC<ForgePanelProps> = ({ compact = false }) => {
   const { forgeMessages, forgeStatus, sendMessage, suggestions, clearSuggestions, forgeCreativity, setContext } = useAIStore();
-  const { activeTab, tabs, updateTabContent, addTab, togglePreview, toggleTerminal, files } = useEditorStore();
+  const { activeTab, tabs, updateTabContent, addTab, togglePreview, files } = useEditorStore();
   const [input, setInput] = useState('');
   const [showContext, setShowContext] = useState(true);
   const [isGeneratingFiles, setIsGeneratingFiles] = useState(false);
@@ -264,6 +280,7 @@ export const ForgePanel: React.FC<ForgePanelProps> = ({ compact = false }) => {
 
       setContext({
         currentFile: activeTabData.name,
+        selectedCode: activeTabData.content || null,
         projectContext: extractProjectContext(files),
       });
     }
@@ -277,258 +294,72 @@ export const ForgePanel: React.FC<ForgePanelProps> = ({ compact = false }) => {
     e.preventDefault();
     if (!input.trim()) return;
     
-    const prompt = input.toLowerCase();
     const userMessage = input;
     setInput('');
     
-    // Check if user wants to create a website/app
-    const isWebsitePrompt = prompt.includes('create') || prompt.includes('build') || 
-                           prompt.includes('website') || prompt.includes('app') ||
-                           prompt.includes('landing page') || prompt.includes('portfolio');
+    // Always use real AI - send through the store which calls Mistral
+    sendMessage('forge', userMessage);
+  };
+
+  // Extract files from the latest forge AI response and add to editor
+  const handleApplyFiles = (messageContent: string) => {
+    const service = new FileGenerationService();
+    const parsedFiles = service.parseFilesFromPrompt(messageContent);
     
-    if (isWebsitePrompt) {
-      // Generate files automatically
-      setIsGeneratingFiles(true);
-      setGenerationProgress('🚀 Starting file generation...');
-      
-      // Send message to AI first
-      sendMessage('forge', userMessage);
-      
-      setTimeout(async () => {
-        setGenerationProgress('📝 Creating HTML structure...');
-        await new Promise(resolve => setTimeout(resolve, 800));
+    if (parsedFiles.length === 0) return;
+    
+    setIsGeneratingFiles(true);
+    setGenerationProgress('📦 Adding files to editor...');
+    
+    (async () => {
+      // Step 1: Add files to editor tabs
+      for (const file of parsedFiles) {
+        setGenerationProgress(`✨ Adding ${file.path}...`);
+        await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Generate beautiful template files
-        const files = [
-          {
-            id: `file-${Date.now()}-1`,
-            name: 'index.html',
-            content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Beautiful Website</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <header class="header">
-            <h1 class="title">Welcome to My Website</h1>
-            <p class="subtitle">Built with AI assistance ✨</p>
-        </header>
-        <main class="content">
-            <div class="card">
-                <h2>About</h2>
-                <p>This is a beautiful, responsive website created instantly.</p>
-            </div>
-            <div class="card">
-                <h2>Features</h2>
-                <ul>
-                    <li>Modern design</li>
-                    <li>Fully responsive</li>
-                    <li>Smooth animations</li>
-                </ul>
-            </div>
-        </main>
-    </div>
-    <script src="script.js"></script>
-</body>
-</html>`,
-            language: 'html',
-            path: 'index.html'
-          },
-          {
-            id: `file-${Date.now()}-2`,
-            name: 'styles.css',
-            content: `* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    padding: 2rem;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-.header {
-    text-align: center;
-    color: white;
-    margin-bottom: 3rem;
-    animation: fadeIn 1s ease-in;
-}
-
-.title {
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-}
-
-.subtitle {
-    font-size: 1.5rem;
-    opacity: 0.9;
-}
-
-.content {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-}
-
-.card {
-    background: white;
-    padding: 2rem;
-    border-radius: 1rem;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    animation: slideUp 0.6s ease-out;
-}
-
-.card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 30px 80px rgba(0,0,0,0.4);
-}
-
-.card h2 {
-    color: #667eea;
-    margin-bottom: 1rem;
-    font-size: 1.8rem;
-}
-
-.card p, .card li {
-    color: #555;
-    line-height: 1.6;
-    font-size: 1.1rem;
-}
-
-.card ul {
-    list-style: none;
-    padding-left: 0;
-}
-
-.card li {
-    padding: 0.5rem 0;
-    padding-left: 1.5rem;
-    position: relative;
-}
-
-.card li::before {
-    content: "✓";
-    position: absolute;
-    left: 0;
-    color: #667eea;
-    font-weight: bold;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@media (max-width: 768px) {
-    .title {
-        font-size: 2rem;
-    }
-    
-    .subtitle {
-        font-size: 1.2rem;
-    }
-}`,
-            language: 'css',
-            path: 'styles.css'
-          },
-          {
-            id: `file-${Date.now()}-3`,
-            name: 'script.js',
-            content: `console.log('🚀 Website loaded successfully!');
-
-// Add interactive elements
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM fully loaded and parsed');
-    
-    // Add click animation to cards
-    const cards = document.querySelectorAll('.card');
-    cards.forEach(card => {
-        card.addEventListener('click', () => {
-            card.style.transform = 'scale(0.98)';
-            setTimeout(() => {
-                card.style.transform = '';
-            }, 200);
+        addTab({
+          id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          name: file.path.split('/').pop() || file.path,
+          content: file.content,
+          language: file.language,
+          isActive: false,
+          isModified: false,
+          path: file.path,
         });
-    });
-    
-    // Log message
-    console.log('✨ Interactive features initialized');
-});`,
-            language: 'javascript',
-            path: 'script.js'
-          }
-        ];
+      }
+      
+      // Step 2: Detect and install dependencies
+      const { detectDependencies, resolveDependencies } = await import('@/services/dependencyService');
+      const detectedPkgs = detectDependencies(parsedFiles);
+      
+      if (detectedPkgs.length > 0) {
+        setGenerationProgress(`📦 Installing ${detectedPkgs.length} dependencies...`);
         
-        // Add files to editor with streaming effect
-        for (const file of files) {
-          setGenerationProgress(`✨ Generating ${file.name}...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          addTab({
-            id: file.id,
-            name: file.name,
-            content: file.content,
-            language: file.language,
-            isActive: false,
-            isModified: false,
-            path: file.path
+        try {
+          const result = await resolveDependencies(detectedPkgs, (dep) => {
+            setGenerationProgress(`📦 ${dep.status === 'installed' ? '✅' : '⏳'} ${dep.name}@${dep.version}`);
           });
+          
+          const installed = result.dependencies.filter(d => d.status === 'installed').length;
+          const failed = result.dependencies.filter(d => d.status === 'error').length;
+          
+          setGenerationProgress(
+            `✅ ${parsedFiles.length} file(s) added, ${installed} deps installed${failed > 0 ? `, ${failed} failed` : ''}`
+          );
+        } catch {
+          setGenerationProgress(`✅ ${parsedFiles.length} file(s) added (deps skipped)`);
         }
-        
-        setGenerationProgress('📦 Installing dependencies...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Show terminal
-        toggleTerminal();
-        
-        setGenerationProgress('🌐 Starting preview...');
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Show preview
-        togglePreview();
-        
-        setGenerationProgress('✅ Website ready!');
-        setTimeout(() => {
-          setIsGeneratingFiles(false);
-          setGenerationProgress('');
-        }, 2000);
-      }, 1000);
-    } else {
-      // Regular message
-      sendMessage('forge', userMessage);
-    }
+      } else {
+        setGenerationProgress(`✅ ${parsedFiles.length} file(s) added!`);
+      }
+      
+      togglePreview();
+      
+      setTimeout(() => {
+        setIsGeneratingFiles(false);
+        setGenerationProgress('');
+      }, 2000);
+    })();
   };
 
   const handleAcceptSuggestion = (suggestion: CodeSuggestion) => {
@@ -579,6 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button
               onClick={() => setShowContext(!showContext)}
               className="text-gray-500 hover:text-white"
+              title="Toggle context"
             >
               <ChevronUp className="w-3 h-3" />
             </button>
@@ -603,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div className="text-xs text-gray-400 mb-2">{generationProgress}</div>
             <div className="w-full bg-neural-input rounded-full h-1.5 overflow-hidden">
-              <div className="h-full bg-forge rounded-full animate-pulse" style={{ width: '70%' }} />
+              <div className="h-full bg-forge rounded-full animate-pulse w-[70%]" />
             </div>
           </div>
         )}
@@ -632,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         {/* Messages */}
         {forgeMessages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble key={message.id} message={message} onApplyFiles={handleApplyFiles} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -670,6 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
             type="submit"
             disabled={!input.trim()}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-forge disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Send message"
           >
             <Send className="w-4 h-4" />
           </button>

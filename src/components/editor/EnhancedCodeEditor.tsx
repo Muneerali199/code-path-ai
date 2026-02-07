@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react'
-import Editor, { Monaco } from '@monaco-editor/react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
+import Editor, { Monaco, DiffEditor } from '@monaco-editor/react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,10 +21,20 @@ import {
   FileJson,
   Search,
   Replace,
-  Wand2
+  Wand2,
+  Check,
+  X,
+  GitCompare,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+
+export interface PendingChange {
+  originalCode: string
+  newCode: string
+  description?: string
+  source: 'ai-generate' | 'ai-modify' | 'ai-improve'
+}
 
 interface EnhancedCodeEditorProps {
   file: {
@@ -37,6 +47,9 @@ interface EnhancedCodeEditorProps {
   onExecute?: (code: string, language: string) => void
   onFormat?: () => void
   className?: string
+  pendingChange?: PendingChange | null
+  onAcceptChange?: () => void
+  onRejectChange?: () => void
 }
 
 const languageMap: { [key: string]: string } = {
@@ -74,15 +87,60 @@ const themeOptions = [
 const fontSizeOptions = [12, 14, 16, 18, 20, 24]
 const tabSizeOptions = [2, 4, 8]
 
-export default function EnhancedCodeEditor({
+const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
   file,
   onFileChange,
   onExecute,
   onFormat,
-  className
+  className,
+  pendingChange,
+  onAcceptChange,
+  onRejectChange,
 }: EnhancedCodeEditorProps) {
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<Monaco | null>(null)
+  const fileRef = useRef(file)
+  const prevFileIdRef = useRef(file.id)
+
+  // Keep fileRef synced for use in onChange callback
+  useEffect(() => { fileRef.current = file }, [file])
+
+  // When switching to a different file, update editor value + language without remounting
+  // Also sync content when the same file's content changes externally (e.g., after AI generation)
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    if (!editor || !monaco) return
+
+    const isSwitchingFile = file.id !== prevFileIdRef.current
+
+    if (isSwitchingFile) {
+      prevFileIdRef.current = file.id
+      const model = editor.getModel()
+      if (model) {
+        // Update language
+        monaco.editor.setModelLanguage(model, file.language || 'javascript')
+        // Update value
+        const currentVal = editor.getValue()
+        if (currentVal !== (file.content || '')) {
+          editor.setValue(file.content || '')
+        }
+        // Reset cursor to top
+        editor.setPosition({ lineNumber: 1, column: 1 })
+        editor.revealLine(1)
+      }
+    } else {
+      // Same file — sync content if it changed externally (e.g., AI applied changes)
+      const currentVal = editor.getValue()
+      if (currentVal !== (file.content || '')) {
+        // Preserve cursor position when syncing content
+        const position = editor.getPosition()
+        editor.setValue(file.content || '')
+        if (position) editor.setPosition(position)
+      }
+    }
+  }, [file.id, file.content, file.language])
+
   const [fontSize, setFontSize] = useState(14)
   const [tabSize, setTabSize] = useState(2)
   const [theme, setTheme] = useState('vs-dark')
@@ -121,28 +179,23 @@ export default function EnhancedCodeEditor({
           { token: 'metatag', foreground: '569CD6' },
         ],
         colors: {
-          'editor.background': '#1E1E1E',
+          'editor.background': '#0d0d15',
           'editor.foreground': '#D4D4D4',
-          'editorLineNumber.foreground': '#858585',
-          'editor.selectionBackground': '#264F78',
-          'editor.selectionHighlightBackground': '#264F7840',
-          'editor.wordHighlightBackground': '#575757B8',
-          'editor.wordHighlightStrongBackground': '#004972B8',
-          'editor.findMatchBackground': '#515C6A',
-          'editor.findMatchHighlightBackground': '#EA5C0055',
-          'editor.findRangeHighlightBackground': '#3A3D4160',
-          'editor.hoverHighlightBackground': '#264F7840',
-          'editor.lineHighlightBackground': '#FFFFFF0F',
-          'editor.rangeHighlightBackground': '#FFFFFF0B',
-          'editorCursor.foreground': '#D4D4D4',
-          'editorBracketMatch.background': '#006400',
-          'editorBracketMatch.border': '#888888',
-          'editorGutter.background': '#1E1E1E',
-          'editorIndentGuide.background': '#404040',
-          'editorIndentGuide.activeBackground': '#707070',
-          'editorRuler.foreground': '#5A5A5A',
-          'editorWidget.background': '#2D2D30',
-          'editorWidget.border': '#5A5A5A',
+          'editorLineNumber.foreground': '#3a3a52',
+          'editorLineNumber.activeForeground': '#6e6e8a',
+          'editor.selectionBackground': '#3a2d6e80',
+          'editor.lineHighlightBackground': '#ffffff06',
+          'editorCursor.foreground': '#a78bfa',
+          'editorBracketMatch.background': '#7c3aed20',
+          'editorBracketMatch.border': '#7c3aed60',
+          'editorGutter.background': '#0d0d15',
+          'editorIndentGuide.background': '#ffffff08',
+          'editorIndentGuide.activeBackground': '#ffffff15',
+          'editorWidget.background': '#12121e',
+          'editorWidget.border': '#ffffff10',
+          'scrollbarSlider.background': '#ffffff10',
+          'scrollbarSlider.hoverBackground': '#ffffff18',
+          'scrollbarSlider.activeBackground': '#ffffff20',
           'input.background': '#3C3C3C',
           'input.border': '#5A5A5A',
           'input.foreground': '#CCCCCC',
@@ -243,6 +296,14 @@ export default function EnhancedCodeEditor({
     editorRef.current = editor
     monacoRef.current = monaco
 
+    // Ensure the editor has the correct content on mount
+    // (critical when re-mounting after streaming animation)
+    const currentContent = fileRef.current?.content || ''
+    const editorContent = editor.getValue()
+    if (editorContent !== currentContent) {
+      editor.setValue(currentContent)
+    }
+
     // Set up the custom theme
     if (monaco) {
       monaco.editor.defineTheme('custom-dark', {
@@ -266,42 +327,37 @@ export default function EnhancedCodeEditor({
           { token: 'metatag', foreground: '569CD6' },
         ],
         colors: {
-          'editor.background': '#1E1E1E',
+          'editor.background': '#0d0d15',
           'editor.foreground': '#D4D4D4',
-          'editorLineNumber.foreground': '#858585',
-          'editor.selectionBackground': '#264F78',
-          'editor.selectionHighlightBackground': '#264F7840',
-          'editor.wordHighlightBackground': '#575757B8',
-          'editor.wordHighlightStrongBackground': '#004972B8',
-          'editor.findMatchBackground': '#515C6A',
-          'editor.findMatchHighlightBackground': '#EA5C0055',
-          'editor.findRangeHighlightBackground': '#3A3D4160',
-          'editor.hoverHighlightBackground': '#264F7840',
-          'editor.lineHighlightBackground': '#FFFFFF0F',
-          'editor.rangeHighlightBackground': '#FFFFFF0B',
-          'editorCursor.foreground': '#D4D4D4',
-          'editorBracketMatch.background': '#006400',
-          'editorBracketMatch.border': '#888888',
-          'editorGutter.background': '#1E1E1E',
-          'editorIndentGuide.background': '#404040',
-          'editorIndentGuide.activeBackground': '#707070',
-          'editorRuler.foreground': '#5A5A5A',
-          'editorWidget.background': '#2D2D30',
-          'editorWidget.border': '#5A5A5A',
-          'input.background': '#3C3C3C',
-          'input.border': '#5A5A5A',
+          'editorLineNumber.foreground': '#3a3a52',
+          'editorLineNumber.activeForeground': '#6e6e8a',
+          'editor.selectionBackground': '#3a2d6e80',
+          'editor.selectionHighlightBackground': '#3a2d6e40',
+          'editor.wordHighlightBackground': '#3a2d6e50',
+          'editor.wordHighlightStrongBackground': '#4a3d7e50',
+          'editor.findMatchBackground': '#5a4d8e50',
+          'editor.findMatchHighlightBackground': '#7c3aed30',
+          'editor.findRangeHighlightBackground': '#3a2d6e20',
+          'editor.hoverHighlightBackground': '#3a2d6e30',
+          'editor.lineHighlightBackground': '#ffffff06',
+          'editor.rangeHighlightBackground': '#ffffff08',
+          'editorCursor.foreground': '#a78bfa',
+          'editorBracketMatch.background': '#7c3aed20',
+          'editorBracketMatch.border': '#7c3aed60',
+          'editorGutter.background': '#0d0d15',
+          'editorIndentGuide.background': '#ffffff08',
+          'editorIndentGuide.activeBackground': '#ffffff15',
+          'editorRuler.foreground': '#ffffff10',
+          'editorWidget.background': '#12121e',
+          'editorWidget.border': '#ffffff10',
+          'input.background': '#0a0a14',
+          'input.border': '#ffffff10',
           'input.foreground': '#CCCCCC',
-          'inputOption.activeBorder': '#007ACC',
-          'inputValidation.errorBackground': '#5A1D1D',
-          'inputValidation.errorBorder': '#BE1100',
-          'inputValidation.infoBackground': '#053B70',
-          'inputValidation.infoBorder': '#007ACC',
-          'inputValidation.warningBackground': '#352A05',
-          'inputValidation.warningBorder': '#B89500',
-          'scrollbar.shadow': '#00000033',
-          'scrollbarSlider.background': '#79797966',
-          'scrollbarSlider.hoverBackground': '#646464B3',
-          'scrollbarSlider.activeBackground': '#646464B3',
+          'inputOption.activeBorder': '#7c3aed',
+          'scrollbar.shadow': '#00000040',
+          'scrollbarSlider.background': '#ffffff10',
+          'scrollbarSlider.hoverBackground': '#ffffff18',
+          'scrollbarSlider.activeBackground': '#ffffff20',
           'badge.background': '#4D4D4D',
           'badge.foreground': '#F8F8F8',
           'progressBar.background': '#007ACC',
@@ -525,11 +581,13 @@ export default function EnhancedCodeEditor({
 
   if (!file) {
     return (
-      <div className={cn("flex items-center justify-center h-full bg-[#09090b] text-slate-400", className)}>
+      <div className={cn("flex items-center justify-center h-full bg-[#0d0d15] text-white/30", className)}>
         <div className="text-center">
-          <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p className="text-lg">No file selected</p>
-          <p className="text-sm mt-2">Select a file from the explorer to start editing</p>
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-5">
+            <FileText className="w-7 h-7 text-white/15" />
+          </div>
+          <p className="text-[15px] font-medium text-white/40 mb-1.5">No file selected</p>
+          <p className="text-[12px] text-white/20">Select a file from the explorer to start editing</p>
         </div>
       </div>
     )
@@ -539,78 +597,85 @@ export default function EnhancedCodeEditor({
   const currentLanguage = languageMap[file.language] || file.language || 'plaintext'
 
   return (
-    <div className={cn("flex flex-col h-full bg-[#09090b]", className)}>
+    <div className={cn("flex flex-col h-full bg-[#0d0d15]", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between p-3 bg-[#09090b] border-b border-white/10">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0e0e16] border-b border-white/[0.06]">
         <div className="flex items-center space-x-2">
-          <div className="flex items-center space-x-1 text-sm text-slate-300">
-            <Code className="w-4 h-4" />
-            <span>{file.name}</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-slate-500">{currentLanguage}</span>
+          <div className="flex items-center space-x-2 text-[12px]">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/[0.04]">
+              <Code className="w-3.5 h-3.5 text-violet-400" />
+              <span className="text-white/70 font-medium">{file.name}</span>
+            </div>
+            <span className="text-white/15">|</span>
+            <span className="text-white/30 text-[11px]">{currentLanguage}</span>
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-0.5">
           {/* Search */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={() => setShowSearch(!showSearch)}
           >
-            <Search className="w-4 h-4" />
+            <Search className="w-3.5 h-3.5" />
           </Button>
 
           {/* Settings */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={() => setShowSettings(!showSettings)}
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5" />
           </Button>
+
+          <div className="w-px h-4 bg-white/[0.06] mx-1"></div>
 
           {/* Format */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={handleFormat}
           >
-            <Wand2 className="w-4 h-4" />
+            <Wand2 className="w-3.5 h-3.5" />
           </Button>
 
           {/* Copy */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={handleCopy}
           >
-            <Copy className="w-4 h-4" />
+            <Copy className="w-3.5 h-3.5" />
           </Button>
 
           {/* Download */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={handleDownload}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
           </Button>
+
+          <div className="w-px h-4 bg-white/[0.06] mx-1"></div>
 
           {/* Execute */}
           {onExecute && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+              className="h-7 px-2 text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-500/[0.08] rounded-md gap-1 text-[11px]"
               onClick={handleExecute}
             >
-              <Play className="w-4 h-4" />
+              <Play className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Run</span>
             </Button>
           )}
 
@@ -618,44 +683,44 @@ export default function EnhancedCodeEditor({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-green-400 hover:text-green-300 hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-emerald-400 hover:bg-white/[0.06] rounded-md"
             onClick={handleSave}
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-3.5 h-3.5" />
           </Button>
 
           {/* Fullscreen */}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2 text-slate-400 hover:text-white hover:bg-slate-700"
+            className="h-7 w-7 p-0 text-white/25 hover:text-white/60 hover:bg-white/[0.06] rounded-md"
             onClick={() => setIsFullScreen(!isFullScreen)}
           >
-            {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </Button>
         </div>
       </div>
 
       {/* Search Panel */}
       {showSearch && (
-        <div className="p-3 bg-[#09090b] border-b border-white/10">
+        <div className="px-3 py-2 bg-[#0e0e16] border-b border-white/[0.06]">
           <div className="flex items-center space-x-2">
             <Input
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white/5 border-white/10 text-white placeholder-slate-400 h-8 text-sm focus:bg-white/10"
+              className="bg-white/[0.04] border-white/[0.06] text-white/80 placeholder-white/20 h-7 text-[12px] focus:bg-white/[0.06] focus:border-violet-500/30 rounded-md"
             />
             <Input
               placeholder="Replace..."
               value={replaceTerm}
               onChange={(e) => setReplaceTerm(e.target.value)}
-              className="bg-white/5 border-white/10 text-white placeholder-slate-400 h-8 text-sm focus:bg-white/10"
+              className="bg-white/[0.04] border-white/[0.06] text-white/80 placeholder-white/20 h-7 text-[12px] focus:bg-white/[0.06] focus:border-violet-500/30 rounded-md"
             />
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-white/10"
+              className="h-7 px-2.5 text-white/30 hover:text-white/70 hover:bg-white/[0.06] text-[11px] rounded-md"
               onClick={handleSearch}
             >
               Find
@@ -663,7 +728,7 @@ export default function EnhancedCodeEditor({
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 px-3 text-slate-400 hover:text-white hover:bg-white/10"
+              className="h-7 px-2.5 text-white/30 hover:text-white/70 hover:bg-white/[0.06] text-[11px] rounded-md"
               onClick={handleReplace}
             >
               Replace
@@ -674,14 +739,14 @@ export default function EnhancedCodeEditor({
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="p-3 bg-[#09090b] border-b border-white/10">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="px-3 py-2.5 bg-[#0e0e16] border-b border-white/[0.06]">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Theme</label>
+              <label className="block text-[10px] text-white/30 mb-1 uppercase tracking-wider font-medium">Theme</label>
               <select
                 value={theme}
                 onChange={(e) => setTheme(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
+                className="w-full bg-white/[0.04] border border-white/[0.06] text-white/70 text-[11px] rounded-md px-2 py-1.5 focus:bg-white/[0.06] focus:border-violet-500/30 focus:outline-none"
               >
                 {themeOptions.map(option => (
                   <option key={option.id} value={option.id}>{option.name}</option>
@@ -689,11 +754,11 @@ export default function EnhancedCodeEditor({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Font Size</label>
+              <label className="block text-[10px] text-white/30 mb-1 uppercase tracking-wider font-medium">Font Size</label>
               <select
                 value={fontSize}
                 onChange={(e) => setFontSize(Number(e.target.value))}
-                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
+                className="w-full bg-white/[0.04] border border-white/[0.06] text-white/70 text-[11px] rounded-md px-2 py-1.5 focus:bg-white/[0.06] focus:border-violet-500/30 focus:outline-none"
               >
                 {fontSizeOptions.map(size => (
                   <option key={size} value={size}>{size}px</option>
@@ -701,11 +766,11 @@ export default function EnhancedCodeEditor({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Tab Size</label>
+              <label className="block text-[10px] text-white/30 mb-1 uppercase tracking-wider font-medium">Tab Size</label>
               <select
                 value={tabSize}
                 onChange={(e) => setTabSize(Number(e.target.value))}
-                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
+                className="w-full bg-white/[0.04] border border-white/[0.06] text-white/70 text-[11px] rounded-md px-2 py-1.5 focus:bg-white/[0.06] focus:border-violet-500/30 focus:outline-none"
               >
                 {tabSizeOptions.map(size => (
                   <option key={size} value={size}>{size}</option>
@@ -713,11 +778,11 @@ export default function EnhancedCodeEditor({
               </select>
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">Word Wrap</label>
+              <label className="block text-[10px] text-white/30 mb-1 uppercase tracking-wider font-medium">Word Wrap</label>
               <select
                 value={wordWrap}
                 onChange={(e) => setWordWrap(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 text-white text-xs rounded px-2 py-1 focus:bg-white/10"
+                className="w-full bg-white/[0.04] border border-white/[0.06] text-white/70 text-[11px] rounded-md px-2 py-1.5 focus:bg-white/[0.06] focus:border-violet-500/30 focus:outline-none"
               >
                 <option value="on">On</option>
                 <option value="off">Off</option>
@@ -726,40 +791,40 @@ export default function EnhancedCodeEditor({
             </div>
           </div>
           
-          <div className="flex items-center space-x-4 mt-3">
-            <label className="flex items-center text-xs text-slate-400">
+          <div className="flex items-center space-x-5 mt-2.5">
+            <label className="flex items-center text-[11px] text-white/35 cursor-pointer hover:text-white/50 transition-colors">
               <input
                 type="checkbox"
                 checked={minimapEnabled}
                 onChange={(e) => setMinimapEnabled(e.target.checked)}
-                className="mr-2"
+                className="mr-1.5 accent-violet-500"
               />
               Minimap
             </label>
-            <label className="flex items-center text-xs text-slate-400">
+            <label className="flex items-center text-[11px] text-white/35 cursor-pointer hover:text-white/50 transition-colors">
               <input
                 type="checkbox"
                 checked={showLineNumbers}
                 onChange={(e) => setShowLineNumbers(e.target.checked)}
-                className="mr-2"
+                className="mr-1.5 accent-violet-500"
               />
-              Line Numbers
+              Lines
             </label>
-            <label className="flex items-center text-xs text-slate-400">
+            <label className="flex items-center text-[11px] text-white/35 cursor-pointer hover:text-white/50 transition-colors">
               <input
                 type="checkbox"
                 checked={showFoldingControls}
                 onChange={(e) => setShowFoldingControls(e.target.checked)}
-                className="mr-2"
+                className="mr-1.5 accent-violet-500"
               />
-              Code Folding
+              Folding
             </label>
-            <label className="flex items-center text-xs text-slate-400">
+            <label className="flex items-center text-[11px] text-white/35 cursor-pointer hover:text-white/50 transition-colors">
               <input
                 type="checkbox"
                 checked={autoSave}
                 onChange={(e) => setAutoSave(e.target.checked)}
-                className="mr-2"
+                className="mr-1.5 accent-violet-500"
               />
               Auto Save
             </label>
@@ -768,66 +833,141 @@ export default function EnhancedCodeEditor({
       )}
 
       {/* Editor */}
-      <div className="flex-1">
-        <Editor
-          height="100%"
-          language={currentLanguage}
-          value={file.content}
-          theme={currentTheme}
-          onChange={(value) => {
-            if (value !== undefined) {
-              onFileChange(value)
-            }
-          }}
-          onMount={handleEditorDidMount}
-          options={{
-            fontSize,
-            tabSize,
-            wordWrap,
-            minimap: { enabled: minimapEnabled },
-            lineNumbers: showLineNumbers ? 'on' : 'off',
-            folding: showFoldingControls,
-            automaticLayout: true,
-            scrollBeyondLastLine: false,
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            cursorSmoothCaretAnimation: 'on',
-            readOnly: false, // Ensure editable
-            bracketPairColorization: {
-              enabled: true,
-              independentColorPoolPerBracketType: true
-            },
-            guides: {
-              indentation: true,
-              highlightActiveIndentation: true
-            },
-            renderLineHighlight: 'line',
-            renderWhitespace: 'selection',
-            fontLigatures: true,
-            fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
-            suggest: {
-              showKeywords: true,
-              showSnippets: true,
-              showClasses: true,
-              showFunctions: true,
-              showVariables: true
-            }
-          }}
-        />
+      <div className="flex-1 flex flex-col">
+        {/* Accept/Reject bar when pending AI change */}
+        {pendingChange && (
+          <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-violet-900/40 via-indigo-900/30 to-violet-900/40 border-b border-violet-500/30">
+            <div className="flex items-center gap-2 text-sm">
+              <GitCompare className="w-4 h-4 text-violet-400" />
+              <span className="text-violet-200 font-medium">AI Changes</span>
+              {pendingChange.description && (
+                <span className="text-white/50 text-xs ml-2">— {pendingChange.description}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onRejectChange}
+                className="h-7 px-3 text-xs text-red-300 hover:text-red-200 hover:bg-red-500/20 border border-red-500/30"
+              >
+                <X className="w-3.5 h-3.5 mr-1" />
+                Reject
+              </Button>
+              <Button
+                size="sm"
+                onClick={onAcceptChange}
+                className="h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500/50"
+              >
+                <Check className="w-3.5 h-3.5 mr-1" />
+                Accept Changes
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Diff Editor or Regular Editor */}
+        {pendingChange ? (
+          <div className="flex-1">
+            <DiffEditor
+              height="100%"
+              language={currentLanguage}
+              original={pendingChange.originalCode}
+              modified={pendingChange.newCode}
+              theme={currentTheme}
+              options={{
+                fontSize,
+                readOnly: true,
+                renderSideBySide: true,
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                minimap: { enabled: false },
+                fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+                renderIndicators: true,
+                originalEditable: false,
+                diffWordWrap: 'on',
+              }}
+            />
+          </div>
+        ) : (
+          <div className="flex-1">
+            <Editor
+              height="100%"
+              language={currentLanguage}
+              defaultValue={file.content || ''}
+              theme={currentTheme}
+              onChange={(value) => {
+                // Skip if value is same as the current file content (prevents mount-triggered onChange)
+                if (value !== undefined && value !== fileRef.current.content) {
+                  onFileChange(value)
+                }
+              }}
+              onMount={handleEditorDidMount}
+              options={{
+                fontSize,
+                tabSize,
+                wordWrap,
+                minimap: { enabled: minimapEnabled },
+                lineNumbers: showLineNumbers ? 'on' : 'off',
+                folding: showFoldingControls,
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                smoothScrolling: true,
+                cursorBlinking: 'smooth',
+                cursorSmoothCaretAnimation: 'on',
+                readOnly: false,
+                bracketPairColorization: {
+                  enabled: true,
+                  independentColorPoolPerBracketType: true
+                },
+                guides: {
+                  indentation: true,
+                  highlightActiveIndentation: true
+                },
+                renderLineHighlight: 'line',
+                renderWhitespace: 'selection',
+                fontLigatures: true,
+                fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+                suggest: {
+                  showKeywords: true,
+                  showSnippets: true,
+                  showClasses: true,
+                  showFunctions: true,
+                  showVariables: true
+                }
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between p-2 bg-[#09090b] border-t border-white/10 text-xs text-slate-400">
-        <div className="flex items-center space-x-4">
-          <span>Ln {editorRef.current?.getPosition()?.lineNumber || 1}, Col {editorRef.current?.getPosition()?.column || 1}</span>
-          <span>{file.language.toUpperCase()}</span>
+      <div className="flex items-center justify-between px-3 py-1 bg-[#0a0a12] border-t border-white/[0.06] text-[10px] text-white/25">
+        <div className="flex items-center space-x-3">
+          <span className="flex items-center gap-1">
+            <span className="text-white/15">Ln</span>
+            <span className="text-white/40">{editorRef.current?.getPosition()?.lineNumber || 1}</span>
+            <span className="text-white/15">Col</span>
+            <span className="text-white/40">{editorRef.current?.getPosition()?.column || 1}</span>
+          </span>
+          <span className="text-white/15">|</span>
+          <span className="text-white/40">{file.language.toUpperCase()}</span>
+          <span className="text-white/15">|</span>
           <span>UTF-8</span>
         </div>
-        <div className="flex items-center space-x-2">
-          {autoSave && <span className="text-green-400">Auto Save</span>}
-          <span>{theme === 'custom-dark' ? 'VS Code Dark+' : theme.toUpperCase()}</span>
+        <div className="flex items-center space-x-3">
+          {autoSave && (
+            <span className="flex items-center gap-1">
+              <span className="w-1 h-1 rounded-full bg-emerald-500/80"></span>
+              <span className="text-emerald-400/50">Auto Save</span>
+            </span>
+          )}
+          <span>{theme === 'custom-dark' ? 'Dark+' : theme}</span>
         </div>
       </div>
     </div>
   )
-}
+})
+
+export default EnhancedCodeEditor

@@ -6,37 +6,37 @@
 
 @layer base {
   :root {
-    /* Neural Dark Theme */
-    --background: 160 20% 4%;
-    --background-panel: 160 15% 7%;
-    --background-input: 160 12% 10%;
+    /* Deep Dark Theme */
+    --background: 240 25% 4%;
+    --background-panel: 240 20% 6%;
+    --background-input: 240 18% 8%;
     
     --foreground: 0 0% 100%;
-    --foreground-secondary: 215 20% 65%;
-    --foreground-muted: 215 16% 47%;
+    --foreground-secondary: 240 10% 60%;
+    --foreground-muted: 240 8% 40%;
     
     /* Accent Colors */
     --accent-sage: 195 100% 50%;
-    --accent-forge: 155 100% 50%;
+    --accent-forge: 263 70% 58%;
     --accent-sync: 270 70% 60%;
     --accent-warn: 20 100% 60%;
     
-    --border-subtle: 215 28% 17%;
-    --border-active: 155 100% 50%;
+    --border-subtle: 240 15% 12%;
+    --border-active: 263 70% 58%;
     
-    --primary: 155 100% 50%;
-    --primary-foreground: 160 20% 4%;
-    --secondary: 160 15% 12%;
+    --primary: 263 70% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 15% 10%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 160 12% 15%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 195 100% 50%;
+    --muted: 240 12% 13%;
+    --muted-foreground: 240 10% 55%;
+    --accent: 263 70% 58%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 215 28% 17%;
-    --input: 160 12% 10%;
-    --ring: 155 100% 50%;
+    --border: 240 15% 12%;
+    --input: 240 18% 8%;
+    --ring: 263 70% 58%;
     --radius: 0.5rem;
   }
 }
@@ -63,27 +63,27 @@
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--background-panel));
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border-subtle));
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--accent-forge) / 0.5);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* Scrollbar for panels */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
@@ -91,7 +91,7 @@
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: hsl(var(--border-subtle));
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 2px;
 }
 
@@ -319,7 +319,7 @@
 
 /* Selection */
 ::selection {
-  background: hsl(var(--accent-forge) / 0.3);
+  background: rgba(139, 92, 246, 0.25);
   color: white;
 }
 
@@ -344,7 +344,7 @@
 
 /* Gradient Text */
 .gradient-text {
-  background: linear-gradient(135deg, #00d4ff 0%, #00ff9d 100%);
+  background: linear-gradient(135deg, #a78bfa 0%, #c084fc 50%, #818cf8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

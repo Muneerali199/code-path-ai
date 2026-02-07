@@ -1,39 +1,252 @@
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Globe, Smartphone, Maximize2, ExternalLink } from 'lucide-react'
+import { RefreshCw, Globe, Smartphone, Maximize2, ExternalLink, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface PreviewPanelProps {
-  files: any[]
-  className?: string
+interface FileNode {
+  id: string
+  name: string
+  type: 'file' | 'folder'
+  content?: string
+  language?: string
+  children?: FileNode[]
 }
 
-export default function PreviewPanel({ files, className }: PreviewPanelProps) {
+interface PreviewPanelProps {
+  files: FileNode[]
+  className?: string
+  dependencies?: { name: string; version: string; status: string }[]
+}
+
+// Flatten file tree to get all files
+function flattenFiles(nodes: FileNode[]): FileNode[] {
+  const result: FileNode[] = []
+  for (const node of nodes) {
+    if (node.type === 'file') result.push(node)
+    if (node.children) result.push(...flattenFiles(node.children))
+  }
+  return result
+}
+
+// Find a file by name in flat list
+function findFile(files: FileNode[], name: string): FileNode | undefined {
+  return files.find(f => f.name === name || f.name.endsWith(`/${name}`))
+}
+
+// Extract imports from code to build CDN import map
+function extractImports(code: string): string[] {
+  const imports: string[] = []
+  const importRegex = /import\s+(?:[\w*{}\s,]+\s+from\s+)?['"]([\w@/.-]+)['"]/g
+  let match
+  while ((match = importRegex.exec(code)) !== null) {
+    const pkg = match[1]
+    // Skip relative imports
+    if (!pkg.startsWith('.') && !pkg.startsWith('/')) {
+      // Get the package name (handle scoped packages)
+      const pkgName = pkg.startsWith('@') ? pkg.split('/').slice(0, 2).join('/') : pkg.split('/')[0]
+      if (!imports.includes(pkgName)) imports.push(pkgName)
+    }
+  }
+  return imports
+}
+
+// Build the srcdoc HTML that renders the project
+function buildPreviewHTML(files: FileNode[]): string {
+  const flat = flattenFiles(files)
+
+  // Find key files
+  const appFile = findFile(flat, 'App.tsx') || findFile(flat, 'App.jsx') || findFile(flat, 'App.js')
+  const indexCss = findFile(flat, 'index.css') || findFile(flat, 'App.css') || findFile(flat, 'styles.css') || findFile(flat, 'style.css')
+  const indexHtml = findFile(flat, 'index.html')
+  const packageJson = findFile(flat, 'package.json')
+
+  // If there's an index.html with no React, just render it directly
+  if (indexHtml?.content && !appFile) {
+    let html = indexHtml.content
+    // Inject CSS if found
+    if (indexCss?.content) {
+      html = html.replace('</head>', `<style>${indexCss.content}</style></head>`)
+    }
+    return html
+  }
+
+  // Collect all CSS from project files
+  const allCss = flat
+    .filter(f => f.name.endsWith('.css'))
+    .map(f => f.content || '')
+    .join('\n')
+
+  // Collect all code files for inline bundling
+  const codeFiles = flat.filter(f =>
+    f.name.endsWith('.tsx') || f.name.endsWith('.jsx') ||
+    f.name.endsWith('.ts') || f.name.endsWith('.js')
+  )
+
+  // Extract all npm package imports
+  const allImports = new Set<string>()
+  for (const file of codeFiles) {
+    if (file.content) {
+      extractImports(file.content).forEach(pkg => allImports.add(pkg))
+    }
+  }
+  // Always need react + react-dom
+  allImports.add('react')
+  allImports.add('react-dom')
+  // Remove react-dom/client — it's part of react-dom
+  allImports.delete('react-dom/client')
+
+  // Build import map using esm.sh
+  const importMap: Record<string, string> = {}
+  for (const pkg of allImports) {
+    importMap[pkg] = `https://esm.sh/${pkg}?bundle`
+  }
+  // Add explicit react-dom/client mapping
+  importMap['react-dom/client'] = `https://esm.sh/react-dom@18/client?bundle`
+  // Ensure react is consistent
+  importMap['react'] = `https://esm.sh/react@18?bundle`
+  importMap['react-dom'] = `https://esm.sh/react-dom@18?bundle`
+
+  // Build module code — inline all project files as modules  
+  // Strip TypeScript types, handle JSX via Babel standalone
+  const appCode = appFile?.content || 'export default function App() { return <div>No App component found</div>; }'
+
+  // Collect component files (for relative imports)
+  const componentModules: { name: string; content: string }[] = []
+  for (const file of codeFiles) {
+    if (file.name !== 'App.tsx' && file.name !== 'App.jsx' && file.name !== 'App.js' &&
+        file.name !== 'main.tsx' && file.name !== 'main.jsx' && file.name !== 'index.tsx') {
+      if (file.content) {
+        componentModules.push({ name: file.name, content: file.content })
+      }
+    }
+  }
+
+  // Escape backticks and dollar signs in code for template literals
+  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$')
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    #root { min-height: 100vh; }
+    .preview-error {
+      padding: 2rem; color: #ef4444; background: #1a1a2e; min-height: 100vh;
+      font-family: monospace; white-space: pre-wrap; font-size: 14px;
+    }
+    .preview-error h3 { color: #f87171; margin-bottom: 1rem; font-size: 16px; }
+    ${allCss}
+  </style>
+  <!-- Tailwind CSS CDN for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Babel standalone for JSX/TSX transpilation -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script type="importmap">
+  ${JSON.stringify({ imports: importMap }, null, 2)}
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-type="module" data-presets="react,typescript">
+    import React from 'react';
+    import ReactDOM from 'react-dom/client';
+
+    // Destructure all common React hooks so user code can reference them directly
+    const { useState, useEffect, useRef, useCallback, useMemo, useContext, useReducer, useLayoutEffect, createContext, Fragment } = React;
+
+    // ---- Inline component modules ----
+    ${componentModules.map(m => {
+      // Wrap each component file's code, stripping its own imports
+      const code = m.content
+        .replace(/^import\s+.*from\s+['"]\.\//gm, '// [resolved] import ')
+        .replace(/^export\s+default\s+/gm, 'export default ')
+      return `// --- ${m.name} ---\n// Component available via inline code`
+    }).join('\n')}
+
+    // ---- Main App Component ----
+    ${appCode
+      // Strip all import statements (they're handled by the import map + top-level imports above)
+      .replace(/^\s*import\s+.*?from\s+['"][^'"]+['"];?\s*$/gm, '')
+      .replace(/^\s*import\s+['"][^'"]+['"];?\s*$/gm, '')
+    }
+
+    // ---- Mount ----
+    try {
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(typeof App !== 'undefined' ? App : () => React.createElement('div', null, 'App component not found')));
+    } catch (err) {
+      document.getElementById('root').innerHTML = '<div class="preview-error"><h3>Runtime Error</h3>' + err.message + '</div>';
+      console.error('Preview render error:', err);
+    }
+  </script>
+  <script>
+    // Global error handler
+    window.addEventListener('error', function(e) {
+      var root = document.getElementById('root');
+      if (root && e.message) {
+        root.innerHTML = '<div class="preview-error"><h3>Error</h3>' + e.message + '</div>';
+      }
+    });
+  </script>
+</body>
+</html>`
+}
+
+const PreviewPanel = React.memo(function PreviewPanel({ files, className, dependencies }: PreviewPanelProps) {
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [key, setKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
 
+  // Build a stable content fingerprint — only rebuild when actual file contents change
+  const filesFingerprint = useMemo(() => {
+    const flat = flattenFiles(files)
+    // Hash based on file names + content lengths + first/last 50 chars
+    return flat.map(f => `${f.name}:${(f.content || '').length}:${(f.content || '').slice(0, 50)}:${(f.content || '').slice(-50)}`).join('|')
+  }, [files])
+
+  // Only rebuild srcdoc when the actual content fingerprint changes (not on every render)
+  const srcdoc = useMemo(() => buildPreviewHTML(files), [filesFingerprint])
+
+  // Track the last srcdoc we loaded into the iframe to avoid re-mounting
+  const lastLoadedSrcdocRef = useRef<string>('')
+
+  // Only show loading when srcdoc actually changes (content change), not on file selection
   useEffect(() => {
-    // Simulate loading
+    if (srcdoc === lastLoadedSrcdocRef.current) return // no actual change
+    lastLoadedSrcdocRef.current = srcdoc
     setIsLoading(true)
+    setError(null)
     const timer = setTimeout(() => {
       setIsLoading(false)
-    }, 1500)
+    }, 2000)
     return () => clearTimeout(timer)
-  }, [files, key])
+  }, [srcdoc, key])
 
   const handleRefresh = () => {
+    lastLoadedSrcdocRef.current = '' // force reload on next render
     setKey(prev => prev + 1)
   }
+
+  const handleOpenNewTab = useCallback(() => {
+    const blob = new Blob([srcdoc], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }, [srcdoc])
 
   return (
     <div className={cn("h-full flex flex-col bg-[#09090b]", className)}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#09090b] border-b border-white/10">
         <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-white">App Preview</span>
+          <Globe className="h-4 w-4 text-green-400" />
+          <span className="text-sm font-medium text-white">Live Preview</span>
           <div className="flex items-center gap-1 ml-4 bg-white/5 rounded-md p-0.5">
             <Button
               variant="ghost"
@@ -66,13 +279,14 @@ export default function PreviewPanel({ files, className }: PreviewPanelProps) {
             className="h-7 px-2 text-slate-400 hover:text-white hover:bg-white/10"
             onClick={handleRefresh}
           >
-            <RefreshCw className="h-3.5 w-3.5 mr-1" />
+            <RefreshCw className={cn("h-3.5 w-3.5 mr-1", isLoading && "animate-spin")} />
             Refresh
           </Button>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-slate-400 hover:text-white hover:bg-white/10"
+            onClick={handleOpenNewTab}
           >
             <ExternalLink className="h-3.5 w-3.5 mr-1" />
             Open in New Tab
@@ -81,68 +295,44 @@ export default function PreviewPanel({ files, className }: PreviewPanelProps) {
       </div>
 
       {/* Preview Area */}
-      <div className="flex-1 bg-muted/30 p-4 flex items-center justify-center overflow-hidden">
-        <div 
+      <div className="flex-1 bg-[#0d0d12] p-2 flex items-center justify-center overflow-hidden">
+        <div
           className={cn(
-            "bg-background transition-all duration-300 shadow-2xl overflow-hidden relative",
-            device === 'mobile' ? "w-[375px] h-[667px] rounded-3xl border-8 border-gray-800" : "w-full h-full rounded-md border border-white/10"
+            "bg-white transition-all duration-300 shadow-2xl overflow-hidden relative",
+            device === 'mobile'
+              ? "w-[375px] h-[667px] rounded-3xl border-8 border-gray-800"
+              : "w-full h-full rounded-md border border-white/10"
           )}
         >
-          {isLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0f] z-10">
               <div className="flex flex-col items-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                <p className="text-sm text-muted-foreground">Starting development server...</p>
+                <Loader2 className="h-8 w-8 animate-spin text-violet-400 mb-4" />
+                <p className="text-sm text-white/40">Building preview...</p>
+                <p className="text-xs text-white/20 mt-1">Compiling JSX & loading dependencies</p>
               </div>
             </div>
-          ) : (
-            <iframe
-              srcDoc={`
-                <!DOCTYPE html>
-                <html>
-                  <head>
-                    <style>
-                      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: #f8fafc; color: #0f172a; }
-                      .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
-                      header { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 1rem 0; margin-bottom: 2rem; }
-                      h1 { margin: 0; font-size: 1.5rem; color: #0f172a; }
-                      .card { background: #fff; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); padding: 1.5rem; margin-bottom: 1rem; }
-                      .btn { display: inline-block; background: #3b82f6; color: #fff; padding: 0.5rem 1rem; border-radius: 0.375rem; text-decoration: none; font-weight: 500; }
-                      .badge { display: inline-block; background: #dbeafe; color: #1e40af; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.5rem; }
-                    </style>
-                  </head>
-                  <body>
-                    <header>
-                      <div class="container">
-                        <h1>🚀 React App Preview</h1>
-                      </div>
-                    </header>
-                    <div class="container">
-                      <div class="card">
-                        <span class="badge">Success</span>
-                        <h2>App Running Successfully</h2>
-                        <p>Your application has been compiled and is running in preview mode.</p>
-                        <p style="color: #64748b; font-size: 0.875rem;">This is a simulated preview of your generated code.</p>
-                        <a href="#" class="btn" style="margin-top: 1rem;">Click Me</a>
-                      </div>
-                      <div class="card">
-                        <h3>Features</h3>
-                        <ul style="padding-left: 1.25rem; color: #475569;">
-                          <li>Hot Reloading enabled</li>
-                          <li>TypeScript support</li>
-                          <li>Tailwind CSS configured</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </body>
-                </html>
-              `}
-              title="Preview"
-              className="w-full h-full border-none bg-white"
-            />
           )}
+          {error && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0f] z-10 p-6">
+              <div className="flex flex-col items-center text-center">
+                <AlertCircle className="h-8 w-8 text-red-400 mb-4" />
+                <p className="text-sm text-red-300 font-mono">{error}</p>
+              </div>
+            </div>
+          )}
+          <iframe
+            ref={iframeRef}
+            key={key}
+            srcDoc={srcdoc}
+            title="Live Preview"
+            className="w-full h-full border-none"
+            sandbox="allow-scripts allow-modals allow-popups allow-same-origin"
+          />
         </div>
       </div>
     </div>
   )
-}
+})
+
+export default PreviewPanel

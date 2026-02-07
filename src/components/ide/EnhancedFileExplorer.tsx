@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, Plus, MoreHorizontal, Search, FileText, FileCode, FileJson, FileImage, FileArchive, Settings, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,7 +27,7 @@ interface EnhancedFileExplorerProps {
 
 const getFileIcon = (fileName: string, type: 'file' | 'folder', isExpanded?: boolean) => {
   if (type === 'folder') {
-    return isExpanded ? <FolderOpen className="w-4 h-4 text-blue-400" /> : <Folder className="w-4 h-4 text-blue-400" />
+    return isExpanded ? <FolderOpen className="w-3.5 h-3.5 text-violet-400/70" /> : <Folder className="w-3.5 h-3.5 text-violet-400/50" />
   }
 
   const extension = fileName.split('.').pop()?.toLowerCase()
@@ -37,24 +37,24 @@ const getFileIcon = (fileName: string, type: 'file' | 'folder', isExpanded?: boo
     case 'jsx':
     case 'ts':
     case 'tsx':
-      return <FileCode className="w-4 h-4 text-yellow-400" />
+      return <FileCode className="w-3.5 h-3.5 text-amber-400/60" />
     case 'json':
-      return <FileJson className="w-4 h-4 text-orange-400" />
+      return <FileJson className="w-3.5 h-3.5 text-orange-400/50" />
     case 'md':
     case 'txt':
-      return <FileText className="w-4 h-4 text-gray-400" />
+      return <FileText className="w-3.5 h-3.5 text-white/25" />
     case 'png':
     case 'jpg':
     case 'jpeg':
     case 'gif':
     case 'svg':
-      return <FileImage className="w-4 h-4 text-green-400" />
+      return <FileImage className="w-3.5 h-3.5 text-emerald-400/50" />
     case 'zip':
     case 'rar':
     case 'tar':
-      return <FileArchive className="w-4 h-4 text-red-400" />
+      return <FileArchive className="w-3.5 h-3.5 text-red-400/50" />
     default:
-      return <File className="w-4 h-4 text-gray-400" />
+      return <File className="w-3.5 h-3.5 text-white/20" />
   }
 }
 
@@ -94,105 +94,106 @@ const FileTreeItem = ({
         <ContextMenuTrigger>
           <div
             className={cn(
-              'flex items-center px-2 py-1 text-sm cursor-pointer transition-colors duration-150 group',
-              'hover:bg-slate-700/50',
-              isActive && 'bg-blue-900/30 border-r-2 border-blue-400',
-              isSearching && 'bg-yellow-900/20'
+              'flex items-center px-2 py-0.5 text-[12px] cursor-pointer transition-colors duration-100 group',
+              'hover:bg-white/[0.04]',
+              isActive && 'bg-violet-500/10 border-r-2 border-violet-500/60',
+              isSearching && 'bg-amber-500/5'
             )}
-            style={{ paddingLeft: `${level * 16 + 8}px` }}
+            style={{ paddingLeft: `${level * 14 + 8}px` }}
             onClick={handleClick}
           >
             <div className="flex items-center flex-1 min-w-0">
               {isFolder && (
                 <div className="mr-1">
                   {node.isExpanded ? (
-                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                    <ChevronDown className="w-3 h-3 text-white/20" />
                   ) : (
-                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                    <ChevronRight className="w-3 h-3 text-white/20" />
                   )}
                 </div>
               )}
               
-              <div className="mr-2 flex-shrink-0">
+              <div className="mr-1.5 flex-shrink-0">
                 {getFileIcon(node.name, node.type, node.isExpanded)}
               </div>
               
               <span className={cn(
-                'flex-1 truncate',
-                node.isHidden && 'text-slate-500 italic'
+                'flex-1 truncate text-white/50',
+                isActive && 'text-white/80',
+                node.isHidden && 'text-white/20 italic'
               )}>
                 {node.name}
               </span>
             </div>
 
             {/* Action buttons - visible on hover */}
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 flex items-center space-x-1">
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-100 flex items-center space-x-0.5">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-400 hover:text-white hover:bg-slate-600"
+                className="h-5 w-5 p-0 text-white/20 hover:text-white/50 hover:bg-white/[0.06]"
                 onClick={(e) => {
                   e.stopPropagation()
                   onContextMenu(node, 'new')
                 }}
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-2.5 h-2.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-400 hover:text-white hover:bg-slate-600"
+                className="h-5 w-5 p-0 text-white/20 hover:text-white/50 hover:bg-white/[0.06]"
                 onClick={(e) => {
                   e.stopPropagation()
                   onContextMenu(node, 'more')
                 }}
               >
-                <MoreHorizontal className="w-3 h-3" />
+                <MoreHorizontal className="w-2.5 h-2.5" />
               </Button>
             </div>
           </div>
         </ContextMenuTrigger>
         
-        <ContextMenuContent className="bg-slate-800 border-slate-700 text-white">
+        <ContextMenuContent className="bg-[#12121e] border-white/[0.08] text-white/70 shadow-2xl shadow-black/50">
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'new-file')}
           >
-            <File className="w-4 h-4 mr-2" />
+            <File className="w-3.5 h-3.5 mr-2 text-white/25" />
             New File
           </ContextMenuItem>
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'new-folder')}
           >
-            <Folder className="w-4 h-4 mr-2" />
+            <Folder className="w-3.5 h-3.5 mr-2 text-white/25" />
             New Folder
           </ContextMenuItem>
-          <ContextMenuSeparator className="bg-slate-700" />
+          <ContextMenuSeparator className="bg-white/[0.06]" />
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'rename')}
           >
             Rename
           </ContextMenuItem>
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'duplicate')}
           >
             Duplicate
           </ContextMenuItem>
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'delete')}
           >
             Delete
           </ContextMenuItem>
-          <ContextMenuSeparator className="bg-slate-700" />
+          <ContextMenuSeparator className="bg-white/[0.06]" />
           <ContextMenuItem 
-            className="hover:bg-slate-700 focus:bg-slate-700"
+            className="hover:bg-white/[0.06] focus:bg-white/[0.06] text-[12px]"
             onClick={() => onContextMenu(node, 'hide')}
           >
-            {node.isHidden ? <Eye className="w-4 h-4 mr-2" /> : <EyeOff className="w-4 h-4 mr-2" />}
+            {node.isHidden ? <Eye className="w-3.5 h-3.5 mr-2" /> : <EyeOff className="w-3.5 h-3.5 mr-2" />}
             {node.isHidden ? 'Show' : 'Hide'}
           </ContextMenuItem>
         </ContextMenuContent>
@@ -219,7 +220,7 @@ const FileTreeItem = ({
   )
 }
 
-export default function EnhancedFileExplorer({
+const EnhancedFileExplorer = React.memo(function EnhancedFileExplorer({
   files,
   onFileSelect,
   onFileChange,
@@ -229,15 +230,29 @@ export default function EnhancedFileExplorer({
   const [searchTerm, setSearchTerm] = useState('')
   const [showHiddenFiles, setShowHiddenFiles] = useState(false)
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [fileTree, setFileTree] = useState<FileNode[]>(files)
 
-  useEffect(() => {
-    setFileTree(files)
-  }, [files])
+  // Use files prop directly instead of duplicating into local state
+  // Apply expand/collapse state from local expandedFolders set
+  const applyExpandState = useCallback((nodes: FileNode[]): FileNode[] => {
+    return nodes.map(node => {
+      if (node.type === 'folder') {
+        return {
+          ...node,
+          isExpanded: expandedFolders.has(node.id),
+          children: node.children ? applyExpandState(node.children) : undefined,
+        }
+      }
+      return node
+    })
+  }, [expandedFolders])
 
+  const fileTree = applyExpandState(files)
+
+  // Auto-expand folders containing the active file (only when activeFile changes)
+  const prevActiveFileRef = useRef(activeFile)
   useEffect(() => {
-    // Auto-expand folders containing the active file
-    if (activeFile) {
+    if (activeFile && activeFile !== prevActiveFileRef.current) {
+      prevActiveFileRef.current = activeFile
       const findAndExpandParents = (nodes: FileNode[], targetId: string, path: string[] = []): string[] => {
         for (const node of nodes) {
           const currentPath = [...path, node.id]
@@ -254,36 +269,34 @@ export default function EnhancedFileExplorer({
         return []
       }
 
-      const parentIds = findAndExpandParents(fileTree, activeFile)
-      setExpandedFolders(new Set([...expandedFolders, ...parentIds]))
+      const parentIds = findAndExpandParents(files, activeFile)
+      if (parentIds.length > 0) {
+        setExpandedFolders(prev => {
+          const next = new Set(prev)
+          let changed = false
+          for (const id of parentIds) {
+            if (!next.has(id)) {
+              next.add(id)
+              changed = true
+            }
+          }
+          return changed ? next : prev
+        })
+      }
     }
-  }, [activeFile, fileTree])
+  }, [activeFile, files])
 
   const handleToggleExpand = (nodeId: string) => {
-    const newExpanded = new Set(expandedFolders)
-    if (newExpanded.has(nodeId)) {
-      newExpanded.delete(nodeId)
-    } else {
-      newExpanded.add(nodeId)
-    }
-    setExpandedFolders(newExpanded)
-
-    // Update the tree state
-    const updateTree = (nodes: FileNode[]): FileNode[] => {
-      return nodes.map(node => {
-        if (node.id === nodeId && node.type === 'folder') {
-          return { ...node, isExpanded: !node.isExpanded }
-        }
-        if (node.children) {
-          return { ...node, children: updateTree(node.children) }
-        }
-        return node
-      })
-    }
-
-    const updatedTree = updateTree(fileTree)
-    setFileTree(updatedTree)
-    onFileChange(updatedTree)
+    setExpandedFolders(prev => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) {
+        next.delete(nodeId)
+      } else {
+        next.add(nodeId)
+      }
+      return next
+    })
+    // Don't call onFileChange — expand/collapse is UI-only state
   }
 
   const handleContextMenu = (node: FileNode, action: string) => {
@@ -341,9 +354,14 @@ export default function EnhancedFileExplorer({
       })
     }
 
-    const updatedTree = updateTree(fileTree)
-    setFileTree(updatedTree)
+    const updatedTree = updateTree(files)
     onFileChange(updatedTree)
+    // Auto-expand the parent folder
+    setExpandedFolders(prev => {
+      const next = new Set(prev)
+      next.add(parentNode.id)
+      return next
+    })
   }
 
   const handleNewFolder = (parentNode: FileNode) => {
@@ -372,9 +390,13 @@ export default function EnhancedFileExplorer({
       })
     }
 
-    const updatedTree = updateTree(fileTree)
-    setFileTree(updatedTree)
+    const updatedTree = updateTree(files)
     onFileChange(updatedTree)
+    setExpandedFolders(prev => {
+      const next = new Set(prev)
+      next.add(parentNode.id)
+      return next
+    })
   }
 
   const handleRename = (node: FileNode) => {
@@ -392,8 +414,7 @@ export default function EnhancedFileExplorer({
         })
       }
 
-      const updatedTree = updateTree(fileTree)
-      setFileTree(updatedTree)
+      const updatedTree = updateTree(files)
       onFileChange(updatedTree)
     }
   }
@@ -419,8 +440,7 @@ export default function EnhancedFileExplorer({
       return result
     }
 
-    const updatedTree = updateTree(fileTree)
-    setFileTree(updatedTree)
+    const updatedTree = updateTree(files)
     onFileChange(updatedTree)
   }
 
@@ -435,8 +455,7 @@ export default function EnhancedFileExplorer({
         })
       }
 
-      const updatedTree = updateTree(fileTree)
-      setFileTree(updatedTree)
+      const updatedTree = updateTree(files)
       onFileChange(updatedTree)
     }
   }
@@ -454,8 +473,7 @@ export default function EnhancedFileExplorer({
       })
     }
 
-    const updatedTree = updateTree(fileTree)
-    setFileTree(updatedTree)
+    const updatedTree = updateTree(files)
     onFileChange(updatedTree)
   }
 
@@ -468,43 +486,46 @@ export default function EnhancedFileExplorer({
         if (matchesSearch) return true
         
         if (file.children) {
-          file.children = filterFiles(file.children)
-          return file.children.length > 0
+          const filteredChildren = filterFiles(file.children)
+          if (filteredChildren.length > 0) {
+            file = { ...file, children: filteredChildren }
+            return true
+          }
         }
         
         return false
       }
       
       if (file.children) {
-        file.children = filterFiles(file.children)
+        file = { ...file, children: filterFiles(file.children) }
       }
       
       return true
     })
   }
 
-  const filteredFiles = filterFiles([...fileTree])
+  const filteredFiles = filterFiles(fileTree)
 
   return (
-    <div className={cn("flex flex-col h-full bg-[#09090b] border-r border-white/10", className)}>
+    <div className={cn("flex flex-col h-full bg-[#0a0a12] border-r border-white/[0.06]", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10">
-        <h3 className="text-sm font-medium text-slate-300">EXPLORER</h3>
-        <div className="flex items-center space-x-1">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.06]">
+        <h3 className="text-[10px] font-medium text-white/25 uppercase tracking-wider">Explorer</h3>
+        <div className="flex items-center space-x-0.5">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-slate-400 hover:text-white hover:bg-slate-700">
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-white/20 hover:text-white/50 hover:bg-white/[0.06]">
                 <Settings className="w-3 h-3" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="bg-slate-800 border-slate-700 text-white p-2" side="bottom" align="end">
+            <PopoverContent className="bg-[#12121e] border-white/[0.08] text-white/70 p-2 shadow-2xl shadow-black/50" side="bottom" align="end">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm">Show Hidden Files</span>
+                  <span className="text-[12px] text-white/50">Show Hidden Files</span>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-5 w-5 p-0"
+                    className="h-5 w-5 p-0 text-white/30 hover:text-white/60"
                     onClick={() => setShowHiddenFiles(!showHiddenFiles)}
                   >
                     {showHiddenFiles ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
@@ -517,20 +538,20 @@ export default function EnhancedFileExplorer({
       </div>
 
       {/* Search */}
-      <div className="p-3 border-b border-white/10">
+      <div className="px-2.5 py-1.5 border-b border-white/[0.06]">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-slate-400" />
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-white/15" />
           <Input
             placeholder="Search files..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 bg-white/5 border-white/10 text-white placeholder-slate-400 text-xs h-8 focus:bg-white/10"
+            className="pl-7 bg-white/[0.03] border-white/[0.06] text-white/60 placeholder-white/15 text-[11px] h-7 focus:bg-white/[0.05] focus:border-violet-500/30"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="sm"
-              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0 text-slate-400 hover:text-white"
+              className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0 text-white/20 hover:text-white/50"
               onClick={() => setSearchTerm('')}
             >
               ×
@@ -542,11 +563,11 @@ export default function EnhancedFileExplorer({
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto ide-scrollbar">
         {filteredFiles.length === 0 ? (
-          <div className="p-4 text-center text-slate-400 text-sm">
+          <div className="p-4 text-center text-white/15 text-[11px]">
             {searchTerm ? 'No files found' : 'No files in project'}
           </div>
         ) : (
-          <div>
+          <div className="py-0.5">
             {filteredFiles.map((file) => (
               <FileTreeItem
                 key={file.id}
@@ -564,12 +585,14 @@ export default function EnhancedFileExplorer({
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-white/10 text-xs text-slate-400">
+      <div className="px-3 py-1.5 border-t border-white/[0.06] text-[10px] text-white/15">
         <div className="flex justify-between">
-          <span>{fileTree.length} items</span>
+          <span>{files.length} items</span>
           <span>{searchTerm ? `${filteredFiles.length} matches` : ''}</span>
         </div>
       </div>
     </div>
   )
-}
+})
+
+export default EnhancedFileExplorer

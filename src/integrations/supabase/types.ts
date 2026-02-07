@@ -82,6 +82,42 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          id: string
+          firebase_uid: string
+          name: string
+          description: string | null
+          template: string
+          prompt: string | null
+          files: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          firebase_uid: string
+          name?: string
+          description?: string | null
+          template?: string
+          prompt?: string | null
+          files?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          firebase_uid?: string
+          name?: string
+          description?: string | null
+          template?: string
+          prompt?: string | null
+          files?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null

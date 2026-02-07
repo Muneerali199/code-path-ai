@@ -23,62 +23,131 @@ export class FileGenerationService {
   // Parse AI response to extract file structure
   parseFilesFromPrompt(response: string): GeneratedFile[] {
     const files: GeneratedFile[] = [];
+    const seen = new Set<string>();
     
-    // Match code blocks with file paths
-    // Format: ```language:path/to/file.ext
+    // Strategy 1: ```language:path/to/file.ext (explicit path after colon)
     const fileBlockRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
     let match;
-
     while ((match = fileBlockRegex.exec(response)) !== null) {
       const [, language, path, content] = match;
-      files.push({
-        path: path.trim(),
-        content: content.trim(),
-        language: language.toLowerCase()
-      });
-    }
-
-    // If no structured blocks found, try to detect common patterns
-    if (files.length === 0) {
-      files.push(...this.detectCommonFilePatterns(response));
-    }
-
-    return files;
-  }
-
-  private detectCommonFilePatterns(response: string): GeneratedFile[] {
-    const files: GeneratedFile[] = [];
-    
-    // Detect HTML
-    if (response.includes('<!DOCTYPE html') || response.includes('<html')) {
-      const htmlMatch = response.match(/<!DOCTYPE[\s\S]*<\/html>/i);
-      if (htmlMatch) {
+      const trimmedPath = path.trim();
+      if (!seen.has(trimmedPath)) {
+        seen.add(trimmedPath);
         files.push({
-          path: 'index.html',
-          content: htmlMatch[0],
-          language: 'html'
+          path: trimmedPath,
+          content: content.trim(),
+          language: language.toLowerCase()
         });
       }
     }
 
-    // Detect CSS
-    const cssMatch = response.match(/```css\n([\s\S]*?)```/);
-    if (cssMatch) {
-      files.push({
-        path: 'styles.css',
-        content: cssMatch[1].trim(),
-        language: 'css'
+    if (files.length > 0) return files;
+
+    // Strategy 2: File path in a comment/heading right before the code block
+    // Matches patterns like:
+    //   **`src/App.tsx`**
+    //   ### src/App.tsx
+    //   // src/App.tsx
+    //   <!-- src/App.tsx -->
+    //   `src/App.tsx`:
+    //   File: src/App.tsx
+    const pathBeforeBlockRegex = /(?:(?:\*{1,2}`|###?\s*|\/\/\s*|<!--\s*|`|File:\s*)([a-zA-Z0-9_\-./]+\.[a-zA-Z]{1,10})(?:`\*{1,2}|`|:?\s*-->|:?))\s*\n+```(\w*)\n([\s\S]*?)```/g;
+    while ((match = pathBeforeBlockRegex.exec(response)) !== null) {
+      const [, path, language, content] = match;
+      const trimmedPath = path.trim();
+      if (!seen.has(trimmedPath) && content.trim()) {
+        seen.add(trimmedPath);
+        files.push({
+          path: trimmedPath,
+          content: content.trim(),
+          language: language?.toLowerCase() || this.inferLanguage(trimmedPath)
+        });
+      }
+    }
+
+    if (files.length > 0) return files;
+
+    // Strategy 3: Fallback — detect code blocks and infer filenames
+    files.push(...this.detectCommonFilePatterns(response));
+
+    return files;
+  }
+
+  // Infer language from file extension
+  private inferLanguage(path: string): string {
+    const ext = path.split('.').pop()?.toLowerCase() || '';
+    const map: Record<string, string> = {
+      tsx: 'typescript', ts: 'typescript', jsx: 'javascript', js: 'javascript',
+      css: 'css', scss: 'scss', html: 'html', json: 'json', md: 'markdown',
+      py: 'python', rs: 'rust', go: 'go', java: 'java', rb: 'ruby',
+      php: 'php', sql: 'sql', yaml: 'yaml', yml: 'yaml', xml: 'xml',
+      sh: 'shell', bash: 'shell',
+    };
+    return map[ext] || 'text';
+  }
+
+  private detectCommonFilePatterns(response: string): GeneratedFile[] {
+    const files: GeneratedFile[] = [];
+    const seen = new Set<string>();
+    
+    // Try to detect filename comments before code blocks: <!-- filename: index.html --> or // filename: app.js
+    const commentFileRegex = /(?:<!--|\/\/|#)\s*(?:filename|file):\s*([^\n>]+?)(?:-->|\n)/gi;
+    const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+    
+    // Collect all code blocks
+    const codeBlocks: { language: string; content: string; index: number }[] = [];
+    let blockMatch;
+    while ((blockMatch = codeBlockRegex.exec(response)) !== null) {
+      codeBlocks.push({
+        language: blockMatch[1]?.toLowerCase() || 'text',
+        content: blockMatch[2]?.trim() || '',
+        index: blockMatch.index,
       });
     }
 
-    // Detect JavaScript
-    const jsMatch = response.match(/```(javascript|js)\n([\s\S]*?)```/);
-    if (jsMatch) {
-      files.push({
-        path: 'script.js',
-        content: jsMatch[2].trim(),
-        language: 'javascript'
-      });
+    // Try to associate filename comments with blocks
+    let commentMatch;
+    const fileComments: { name: string; index: number }[] = [];
+    while ((commentMatch = commentFileRegex.exec(response)) !== null) {
+      fileComments.push({ name: commentMatch[1].trim(), index: commentMatch.index });
+    }
+    
+    for (const block of codeBlocks) {
+      // Find nearest preceding filename comment
+      let fileName = '';
+      for (const fc of fileComments) {
+        if (fc.index < block.index) fileName = fc.name;
+      }
+      
+      if (!fileName) {
+        // Infer filename from language
+        const langToFile: Record<string, string> = {
+          html: 'index.html', htm: 'index.html',
+          css: 'styles.css', scss: 'styles.scss',
+          javascript: 'script.js', js: 'script.js',
+          typescript: 'app.ts', ts: 'app.ts',
+          jsx: 'App.jsx', tsx: 'App.tsx',
+          json: 'package.json',
+          python: 'main.py', py: 'main.py',
+        };
+        fileName = langToFile[block.language] || `file.${block.language || 'txt'}`;
+      }
+      
+      // Avoid duplicate filenames
+      if (seen.has(fileName)) {
+        const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : '';
+        const base = fileName.includes('.') ? fileName.slice(0, fileName.lastIndexOf('.')) : fileName;
+        fileName = `${base}-${seen.size}${ext}`;
+      }
+      seen.add(fileName);
+      
+      if (block.content) {
+        files.push({
+          path: fileName,
+          content: block.content,
+          language: block.language || 'text',
+        });
+      }
     }
 
     return files;

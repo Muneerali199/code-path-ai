@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useAuth } from '@/hooks/useAuth'
+import { createProject, getDefaultProjectFiles } from '@/services/projectService'
 
 const AI_MODELS = [
   { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
@@ -59,27 +60,29 @@ export default function CreateProject() {
 
     setIsSubmitting(true)
     
-    // Simulate creation delay
-    setTimeout(() => {
-      const projectData = {
-        id: Date.now().toString(),
-        name: 'New AI Project',
-        template: 'custom',
-        description: prompt,
-        model: selectedModel.id,
-        files: [
-          {
-            name: 'README.md',
-            content: `# New Project\n\nGenerated from prompt: ${prompt}\nModel: ${selectedModel.name}`,
-            language: 'markdown'
-          }
-        ]
+    try {
+      const firebaseUid = user?.uid
+      if (firebaseUid) {
+        // Create project in Supabase
+        const newProject = await createProject(firebaseUid, {
+          prompt,
+          description: prompt,
+          name: 'New AI Project',
+          template: 'custom',
+          files: getDefaultProjectFiles(),
+        })
+        navigate(`/editor/${newProject.id}`)
+      } else {
+        // Fallback for unauthenticated users
+        localStorage.setItem('websitePrompt', prompt)
+        navigate('/editor')
       }
-      
-      localStorage.setItem('currentProject', JSON.stringify(projectData))
-      navigate('/app', { state: { project: projectData } })
+    } catch (err) {
+      console.error('Failed to create project:', err)
+      toast.error('Failed to create project')
+    } finally {
       setIsSubmitting(false)
-    }, 1000)
+    }
   }
 
   const handleQuickAction = (action: string) => {

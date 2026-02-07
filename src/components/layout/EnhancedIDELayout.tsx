@@ -1,14 +1,50 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import EnhancedFileExplorer from '@/components/ide/EnhancedFileExplorer'
 import EnhancedCodeEditor from '@/components/editor/EnhancedCodeEditor'
 import DualAISystem from '@/components/ai/DualAISystem'
 import OutputPanel from '@/components/editor/OutputPanel'
+import DiffView from '@/components/editor/DiffView'
+import StreamingCodeWriter, { type StreamingFile } from '@/components/editor/StreamingCodeWriter'
+import SessionTimeline from '@/components/ide/SessionTimeline'
+import SkillSummary from '@/components/ide/SkillSummary'
 import StatusBar from '@/components/ide/StatusBar'
 import EnhancedIDEHeader from './EnhancedIDEHeader'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  createProject,
+  getProject,
+  updateProjectFiles,
+  getDefaultProjectFiles,
+  type Project,
+  type ProjectFile,
+} from '@/services/projectService'
+import {
+  extractSkills,
+  extractSkillsFromChanges,
+  createSession,
+  addChangeToSession,
+  endSession,
+  type CodeChange,
+} from '@/services/sessionService'
+
+// Helper: wait for Firebase auth to resolve
+function useAuthReady() {
+  const auth = useAuth()
+  return { ...auth, isReady: !auth.loading }
+}
 
 import PreviewPanel from '@/components/editor/PreviewPanel'
+import { DependencyPanel } from '@/components/editor/DependencyPanel'
+import {
+  detectDependencies,
+  resolveDependencies,
+  extractDepsFromPackageJson,
+  type Dependency,
+} from '@/services/dependencyService'
 
 interface FileNode {
   id: string
@@ -21,15 +57,13 @@ interface FileNode {
   isExpanded?: boolean
 }
 
-interface Project {
-  id: string
-  name: string
-  template: string
-  description: string
-  files: FileNode[]
+interface EnhancedIDELayoutProps {
+  projectId?: string
 }
 
-export default function EnhancedIDELayout() {
+export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps) {
+  const navigate = useNavigate()
+  const { user, isReady } = useAuthReady()
   const [project, setProject] = useState<Project | null>(null)
   const [files, setFiles] = useState<FileNode[]>([])
   const [activeFile, setActiveFile] = useState<FileNode | null>(null)
@@ -37,57 +71,254 @@ export default function EnhancedIDELayout() {
   const [isExecuting, setIsExecuting] = useState(false)
   const [aiPanelVisible, setAiPanelVisible] = useState(true)
   const [previewVisible, setPreviewVisible] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Load project from localStorage or create default
-  useEffect(() => {
-    const loadProject = () => {
+  // Session tracking state
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionChanges, setSessionChanges] = useState<CodeChange[]>([])
+  const [sessionSkills, setSessionSkills] = useState<string[]>([])
+  const [sessionStart, setSessionStart] = useState<string | null>(null)
+  const [selectedDiffChange, setSelectedDiffChange] = useState<CodeChange | null>(null)
+  const [bottomTab, setBottomTab] = useState<'output' | 'timeline' | 'skills' | 'deps'>('output')
+
+  // Dependency state
+  const [projectDeps, setProjectDeps] = useState<Dependency[]>([])
+  const [isInstallingDeps, setIsInstallingDeps] = useState(false)
+
+  // Pending AI change state (for diff view + accept/reject)
+  const [pendingChange, setPendingChange] = useState<{
+    originalCode: string
+    newCode: string
+    description?: string
+    source: 'ai-generate' | 'ai-modify' | 'ai-improve'
+  } | null>(null)
+
+  // Streaming code writer state
+  const [streamingFiles, setStreamingFiles] = useState<StreamingFile[] | null>(null)
+
+  // Auto-save debounce
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSavedFilesRef = useRef<string>('')
+
+  // Refs to track latest project/files for unmount flush
+  const projectRef = useRef<Project | null>(null)
+  const filesRef = useRef<FileNode[]>([])
+  useEffect(() => { projectRef.current = project }, [project])
+  useEffect(() => { filesRef.current = files }, [files])
+
+  // Immediate save — no debounce, for critical saves (AI generation, unmount)
+  const immediateSave = useCallback(async (projectIdToSave: string, filesToSave: FileNode[]) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+    }
+    const filesJson = JSON.stringify(filesToSave)
+    if (filesJson === lastSavedFilesRef.current) return
+    try {
+      await updateProjectFiles(projectIdToSave, filesToSave as ProjectFile[])
+      lastSavedFilesRef.current = filesJson
+      console.log('Project saved successfully')
+    } catch (err) {
+      console.error('Save failed:', err)
+    }
+  }, [])
+
+  // Debounced auto-save to Supabase (for user typing)
+  // Always reads from filesRef at save time to get the latest state
+  const debouncedSave = useCallback((projectIdToSave: string) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      const filesToSave = filesRef.current
+      const filesJson = JSON.stringify(filesToSave)
+      if (filesJson === lastSavedFilesRef.current) return
       try {
-        const savedProject = localStorage.getItem('currentProject')
-        if (savedProject) {
-          const projectData = JSON.parse(savedProject)
-          setProject(projectData)
-          setFiles(projectData.files || [])
-          
-          // Set first file as active
-          const firstFile = findFirstFile(projectData.files || [])
-          if (firstFile) {
-            setActiveFile(firstFile)
+        await updateProjectFiles(projectIdToSave, filesToSave as ProjectFile[])
+        lastSavedFilesRef.current = filesJson
+      } catch (err) {
+        console.error('Auto-save failed:', err)
+      }
+    }, 2000) // Save 2 seconds after last change
+  }, [])
+
+  // Load or create project — only runs after Firebase auth is ready
+  useEffect(() => {
+    // Don't run until Firebase auth has resolved
+    if (!isReady) return
+
+    const initProject = async () => {
+      setIsLoading(true)
+      const firebaseUid = user?.uid
+
+      try {
+        // Case 1: Loading an existing project by ID
+        if (projectId) {
+          const existing = await getProject(projectId)
+          if (existing) {
+            setProject(existing)
+            setFiles(existing.files as FileNode[])
+            lastSavedFilesRef.current = JSON.stringify(existing.files)
+            const first = findFirstFile(existing.files as FileNode[])
+            if (first) setActiveFile(first)
+            setIsLoading(false)
+            return
+          } else {
+            toast.error('Project not found')
+            navigate('/dashboard')
+            return
           }
-        } else {
-          // Create default project if none exists
-          const defaultProject: Project = {
-            id: 'default',
+        }
+
+        // Case 2: Coming from Dashboard with a prompt
+        const pendingPrompt = localStorage.getItem('websitePrompt')
+        if (pendingPrompt) {
+          localStorage.removeItem('websitePrompt')
+
+          if (firebaseUid) {
+            // Create a new project in Supabase with default template files
+            const newProject = await createProject(firebaseUid, {
+              prompt: pendingPrompt,
+              description: pendingPrompt,
+              template: 'website',
+              files: getDefaultProjectFiles(),
+            })
+
+            setProject(newProject)
+            setFiles(newProject.files as FileNode[])
+            lastSavedFilesRef.current = JSON.stringify(newProject.files)
+            const first = findFirstFile(newProject.files as FileNode[])
+            if (first) setActiveFile(first)
+
+            // Update URL to include the project ID (without remounting the component)
+            window.history.replaceState(null, '', `/editor/${newProject.id}`)
+            toast.success('Project created!')
+            setIsLoading(false)
+            return
+          } else {
+            // Not logged in but has prompt — use local fallback with the prompt as description
+            const defaultFiles = getDefaultProjectFiles() as FileNode[]
+            const fallback: Project = {
+              id: 'local',
+              firebase_uid: '',
+              name: pendingPrompt.slice(0, 50),
+              description: pendingPrompt,
+              template: 'website',
+              prompt: pendingPrompt,
+              files: defaultFiles,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+            setProject(fallback)
+            setFiles(defaultFiles)
+            const first = findFirstFile(defaultFiles)
+            if (first) setActiveFile(first)
+            toast.info('Sign in to save your projects')
+            setIsLoading(false)
+            return
+          }
+        }
+
+        // Case 3: Opening /editor directly — create a default project
+        if (firebaseUid) {
+          const newProject = await createProject(firebaseUid, {
             name: 'Welcome Project',
             template: 'default',
             description: 'A starter project to get you coding',
-            files: [
-              {
-                id: 'welcome',
-                name: 'welcome.js',
-                type: 'file',
-                language: 'javascript',
-                content: `// Welcome to CodePath AI IDE!\n// This is your enhanced coding environment with AI assistance.\n\nconsole.log('Hello, World!');\nconsole.log('Start coding and let AI help you along the way.');\n\n// Try our features:\n// 1. File Explorer - Right-click to create, rename, delete files\n// 2. Code Editor - Premium Monaco editor with VS Code Dark+ theme\n// 3. AI Assistant - Explain code or generate new code\n// 4. Project Templates - Start with pre-built templates\n\nfunction greet(name) {\n  return \`Hello, \${name}!\`;\n}\n\nconsole.log(greet('Developer'));`
-              },
-              {
-                id: 'readme',
-                name: 'README.md',
-                type: 'file',
-                language: 'markdown',
-                content: `# Welcome to CodePath AI IDE\n\n## Features\n\n### 🎨 Enhanced Dark Theme\n- VS Code Dark+ theme with premium styling\n- Custom syntax highlighting\n- Professional color scheme\n\n### 📁 Advanced File Explorer\n- Tree structure with folder navigation\n- Context menus for file operations\n- Search functionality\n- File type icons\n\n### 🤖 Dual AI System\n- **Explain Mode**: Get detailed code analysis\n- **Generate Mode**: Create code from descriptions\n- Both work simultaneously\n\n### 🚀 Premium Editor\n- Monaco Editor integration\n- Multiple themes and customization\n- Auto-save and formatting\n- Search and replace\n\n## Getting Started\n\n1. **Create a Project**: Use our project templates\n2. **Explore Files**: Navigate your project structure\n3. **Code with AI**: Use the AI assistant for help\n4. **Run Your Code**: Execute and see output\n\nHappy Coding! 🚀`
-              }
-            ]
-          }
-          setProject(defaultProject)
-          setFiles(defaultProject.files)
-          setActiveFile(defaultProject.files[0])
+            files: getDefaultProjectFiles(),
+          })
+          setProject(newProject)
+          setFiles(newProject.files as FileNode[])
+          lastSavedFilesRef.current = JSON.stringify(newProject.files)
+          const first = findFirstFile(newProject.files as FileNode[])
+          if (first) setActiveFile(first)
+          window.history.replaceState(null, '', `/editor/${newProject.id}`)
+          setIsLoading(false)
+          return
         }
+
+        // Case 4: Not logged in and no prompt — use local-only fallback
+        const defaultFiles = getDefaultProjectFiles() as FileNode[]
+        const fallback: Project = {
+          id: 'local',
+          firebase_uid: '',
+          name: 'Welcome Project',
+          description: 'Sign in to save your projects',
+          template: 'default',
+          prompt: null,
+          files: defaultFiles,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        setProject(fallback)
+        setFiles(defaultFiles)
+        const first = findFirstFile(defaultFiles)
+        if (first) setActiveFile(first)
       } catch (error) {
-        console.error('Error loading project:', error)
-        toast.error('Failed to load project')
+        console.error('Error initializing project:', error)
+        toast.error('Failed to create project. Using local mode.')
+        // Fallback to local defaults
+        const defaultFiles = getDefaultProjectFiles() as FileNode[]
+        const pendingPrompt = localStorage.getItem('websitePrompt')
+        localStorage.removeItem('websitePrompt')
+        setProject({
+          id: 'local',
+          firebase_uid: '',
+          name: pendingPrompt?.slice(0, 50) || 'Welcome Project',
+          description: pendingPrompt || null,
+          template: 'default',
+          prompt: pendingPrompt || null,
+          files: defaultFiles,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        setFiles(defaultFiles)
+        const first = findFirstFile(defaultFiles)
+        if (first) setActiveFile(first)
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    loadProject()
+    initProject()
+    // Cleanup: flush any pending save on unmount instead of discarding
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = null
+      }
+      // Flush pending save immediately
+      const p = projectRef.current
+      const f = filesRef.current
+      if (p && p.id !== 'local' && f.length > 0) {
+        const filesJson = JSON.stringify(f)
+        if (filesJson !== lastSavedFilesRef.current) {
+          updateProjectFiles(p.id, f as ProjectFile[]).catch(err =>
+            console.error('Unmount save failed:', err)
+          )
+        }
+      }
+    }
+  }, [projectId, user?.uid, isReady])
+
+  // Warn before closing tab if there are unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const p = projectRef.current
+      const f = filesRef.current
+      if (p && p.id !== 'local' && f.length > 0) {
+        const filesJson = JSON.stringify(f)
+        if (filesJson !== lastSavedFilesRef.current) {
+          // Attempt to save
+          updateProjectFiles(p.id, f as ProjectFile[]).catch(console.error)
+          e.preventDefault()
+          e.returnValue = ''
+        }
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [])
 
   // Find first file in project structure
@@ -107,33 +338,84 @@ export default function EnhancedIDELayout() {
   // Handle file selection
   const handleFileSelect = (file: FileNode) => {
     console.log("Setting active file:", file.name, file.id);
+    // Clear any pending AI change when switching files
+    if (pendingChange) {
+      setPendingChange(null)
+    }
     setActiveFile(file)
     toast.info(`Opened ${file.name}`)
   }
 
-  // Handle file changes
-  const handleFileChange = (updatedFiles: FileNode[]) => {
+  // Handle file changes (from file explorer: rename, delete, new file, etc.)
+  const handleFileChange = useCallback((updatedFiles: FileNode[]) => {
     setFiles(updatedFiles)
     
-    // Update project in localStorage
     if (project) {
-      const updatedProject = { ...project, files: updatedFiles }
-      setProject(updatedProject)
-      localStorage.setItem('currentProject', JSON.stringify(updatedProject))
+      setProject(prev => prev ? { ...prev, files: updatedFiles } : prev)
+      if (project.id !== 'local') {
+        debouncedSave(project.id)
+      }
     }
-  }
+  }, [project, debouncedSave])
+
+  // Ref to track the active file ID — prevents stale closure from overwriting the wrong file
+  const activeFileRef = useRef<FileNode | null>(activeFile)
+  useEffect(() => { activeFileRef.current = activeFile }, [activeFile])
+
+  // Track user code edits (debounced — captures snapshot every meaningful edit)
+  const userEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previousCodeRef = useRef<string>('')
+
+  const trackUserEdit = useCallback((before: string, after: string) => {
+    if (!activeFile || before === after) return
+    if (userEditTimerRef.current) clearTimeout(userEditTimerRef.current)
+
+    userEditTimerRef.current = setTimeout(() => {
+      const change: CodeChange = {
+        id: `user-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        fileId: activeFile.id,
+        fileName: activeFile.name,
+        before,
+        after,
+        source: 'user',
+        description: `Edited ${activeFile.name}`,
+        concepts: extractSkills(after),
+      }
+      setSessionChanges(prev => {
+        const next = [...prev, change]
+        setSessionSkills(extractSkillsFromChanges(next))
+        return next
+      })
+      if (sessionId) {
+        addChangeToSession(sessionId, change).catch(() => {})
+      }
+      previousCodeRef.current = after
+    }, 5000) // Track user edits every 5s of inactivity
+  }, [activeFile, sessionId])
 
   // Handle code changes
-  const handleCodeChange = (content: string) => {
-    if (activeFile) {
-      const updatedFile = { ...activeFile, content }
-      setActiveFile(updatedFile)
-      
-      // Update file in project structure
+  const handleCodeChange = useCallback((content: string) => {
+    // Always read from ref to get the CURRENT activeFile (not a stale closure)
+    const currentFile = activeFileRef.current
+    if (!currentFile) return
+    // Skip no-op changes (e.g. Monaco fires onChange on mount with same value)
+    if (content === currentFile.content) return
+
+    const beforeContent = currentFile.content || ''
+    const updatedFile = { ...currentFile, content }
+    setActiveFile(updatedFile)
+
+    // Track user edit for session
+    trackUserEdit(beforeContent, content)
+
+    // Update file in project structure using functional updater to avoid stale closure
+    const fileId = currentFile.id
+    setFiles(prevFiles => {
       const updateFileContent = (nodes: FileNode[]): FileNode[] => {
         return nodes.map(node => {
-          if (node.id === activeFile.id) {
-            return updatedFile
+          if (node.id === fileId) {
+            return { ...node, content }
           }
           if (node.children) {
             return { ...node, children: updateFileContent(node.children) }
@@ -141,18 +423,14 @@ export default function EnhancedIDELayout() {
           return node
         })
       }
-      
-      const updatedFiles = updateFileContent(files)
-      setFiles(updatedFiles)
-      
-      // Update project in localStorage
-      if (project) {
-        const updatedProject = { ...project, files: updatedFiles }
-        setProject(updatedProject)
-        localStorage.setItem('currentProject', JSON.stringify(updatedProject))
-      }
+      return updateFileContent(prevFiles)
+    })
+
+    const p = projectRef.current
+    if (p && p.id !== 'local') {
+      debouncedSave(p.id)
     }
-  }
+  }, [debouncedSave, trackUserEdit])
 
   // Handle code execution
   const handleExecute = async (code: string, language: string) => {
@@ -215,16 +493,170 @@ export default function EnhancedIDELayout() {
     }
   }
 
-  // Handle AI code update
-  const handleAICodeUpdate = (newCode: string) => {
-    if (activeFile) {
-      handleCodeChange(newCode)
-      toast.success('AI code applied to editor')
+  // Handle AI code update — stream the new code, then show diff for accept/reject
+  const handleAICodeUpdate = useCallback((newCode: string) => {
+    // Find the target file: use activeFile, or find first file, or create a fallback
+    let currentActive = activeFile
+    if (!currentActive) {
+      currentActive = findFirstFile(filesRef.current)
+    }
+    if (!currentActive) {
+      // No files at all — create a fallback file
+      currentActive = {
+        id: `gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: 'App.tsx',
+        type: 'file' as const,
+        content: '',
+        language: 'typescript',
+      }
+      // Add this file to the files list
+      setFiles(prev => [...prev, currentActive!])
+      filesRef.current = [...filesRef.current, currentActive]
+    }
+
+    // Stream the single file first
+    const singleFile: StreamingFile = {
+      id: currentActive.id,
+      name: currentActive.name,
+      content: newCode,
+      language: currentActive.language || 'javascript',
+      type: 'file',
+    }
+    // Store the pending change for after streaming
+    pendingAfterStreamRef.current = {
+      originalCode: currentActive.content || '',
+      newCode,
+      description: 'AI-generated code changes',
+      source: 'ai-modify' as const,
+    }
+    // Ensure activeFile is set
+    if (!activeFile) setActiveFile(currentActive)
+    setStreamingFiles([singleFile])
+    toast.info('AI is writing code...')
+  }, [activeFile])
+
+  // Ref for pending change data after single-file streaming
+  const pendingAfterStreamRef = useRef<{
+    originalCode: string
+    newCode: string
+    description: string
+    source: 'ai-generate' | 'ai-modify' | 'ai-improve'
+  } | null>(null)
+
+  // Accept pending AI change
+  const handleAcceptChange = () => {
+    if (pendingChange && activeFile) {
+      handleCodeChange(pendingChange.newCode)
+      // Force immediate save after accepting AI changes
+      setTimeout(() => {
+        const p = projectRef.current
+        const f = filesRef.current
+        if (p && p.id !== 'local' && f.length > 0) {
+          immediateSave(p.id, f)
+        }
+      }, 100)
+      toast.success('AI changes accepted')
+      setPendingChange(null)
     }
   }
 
+  // Reject pending AI change
+  const handleRejectChange = () => {
+    setPendingChange(null)
+    toast.info('AI changes rejected')
+  }
+
+  // Ref to hold processed files during streaming
+  const streamingProcessedRef = useRef<FileNode[]>([])
+
+  // Apply generated files after streaming completes (or directly if no streaming)
+  const applyGeneratedFiles = useCallback((processedFiles: FileNode[]) => {
+    // Merge generated files with existing files (update existing, add new)
+    const mergeFiles = (existing: FileNode[], generated: FileNode[]): FileNode[] => {
+      const merged = [...existing]
+
+      for (const genFile of generated) {
+        const existingIndex = merged.findIndex(f => f.name === genFile.name)
+        if (existingIndex >= 0) {
+          // Update existing file — keep existing ID for React key stability
+          merged[existingIndex] = { ...merged[existingIndex], ...genFile, id: merged[existingIndex].id }
+        } else {
+          // Add new file
+          merged.push(genFile)
+        }
+      }
+
+      return merged
+    }
+
+    // Compute merged files directly from ref (synchronous, no closure issues)
+    const currentFiles = filesRef.current
+    const finalFiles = currentFiles.length > 0 ? mergeFiles(currentFiles, processedFiles) : processedFiles
+    setFiles(finalFiles)
+    // Immediately sync ref so downstream code and future calls see the latest
+    filesRef.current = finalFiles
+
+    // Update project state in the same render batch (no setTimeout)
+    const currentProject = projectRef.current
+    if (currentProject) {
+      setProject(prev => prev ? { ...prev, files: finalFiles } : prev)
+      if (currentProject.id !== 'local') {
+        // Save after a microtask to ensure state has flushed
+        Promise.resolve().then(() => {
+          immediateSave(currentProject.id, finalFiles)
+        })
+      }
+    }
+
+    const findFileByName = (nodes: FileNode[], name: string): FileNode | null => {
+      for (const node of nodes) {
+        if (node.name === name) return node
+        if (node.children) {
+          const found = findFileByName(node.children, name)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
+    // Find the active file from the MERGED result (correct IDs) not from processedFiles
+    // This prevents ID mismatch where processedFiles has random IDs but merged files keep existing IDs
+    const mainFile = findFileByName(finalFiles, 'App.tsx') ||
+                     findFileByName(finalFiles, 'index.tsx') ||
+                     findFirstFile(finalFiles)
+
+    if (mainFile) setActiveFile(mainFile)
+
+    toast.success('Project files applied successfully')
+
+    // Auto-detect and install dependencies
+    const allFilesList = flattenFiles(finalFiles)
+    const fileMeta = allFilesList.map(f => ({
+      path: f.name,
+      content: f.content || '',
+      language: f.language || '',
+    }))
+    const detectedPkgs = [
+      ...detectDependencies(fileMeta),
+      ...extractDepsFromPackageJson(fileMeta),
+    ]
+    const uniquePkgs = [...new Set(detectedPkgs)]
+
+    if (uniquePkgs.length > 0) {
+      setBottomTab('deps')
+      setProjectDeps(uniquePkgs.map(name => ({ name, version: 'latest', status: 'pending' as const })))
+      handleInstallDeps(uniquePkgs, true) // auto-preview after install
+    } else {
+      // No dependencies — show preview immediately
+      setTimeout(() => {
+        setPreviewVisible(true)
+        toast.success('Preview is ready')
+      }, 500)
+    }
+  }, [immediateSave])
+
   // Handle AI file generation
-  const handleFilesGenerated = (newFiles: any[]) => {
+  const handleFilesGenerated = useCallback((newFiles: any[]) => {
     // Helper to process files and ensure IDs
     const processFiles = (items: any[]): FileNode[] => {
       return items.map(item => ({
@@ -239,51 +671,179 @@ export default function EnhancedIDELayout() {
     }
 
     const processedFiles = processFiles(newFiles)
-    setFiles(processedFiles)
 
-    // Update project
-    if (project) {
-      const updatedProject = { ...project, files: processedFiles }
-      setProject(updatedProject)
-      localStorage.setItem('currentProject', JSON.stringify(updatedProject))
-    }
-
-    // Set first file as active (e.g. App.tsx or index.tsx or README)
-    const findFileByName = (nodes: FileNode[], name: string): FileNode | null => {
+    // Collect flat file list for streaming
+    const collectStreamingFiles = (nodes: FileNode[]): StreamingFile[] => {
+      const result: StreamingFile[] = []
       for (const node of nodes) {
-        if (node.name === name) return node
-        if (node.children) {
-          const found = findFileByName(node.children, name)
-          if (found) return found
+        if (node.type === 'file' && node.content) {
+          result.push({
+            id: node.id,
+            name: node.name,
+            content: node.content,
+            language: node.language || 'text',
+            type: 'file',
+          })
         }
+        if (node.children) result.push(...collectStreamingFiles(node.children))
       }
-      return null
+      return result
     }
 
-    const mainFile = findFileByName(processedFiles, 'App.tsx') || 
-                     findFileByName(processedFiles, 'index.tsx') || 
-                     findFirstFile(processedFiles)
-    
-    if (mainFile) {
-      setActiveFile(mainFile)
+    const filesToStream = collectStreamingFiles(processedFiles)
+
+    if (filesToStream.length > 0) {
+      // Start streaming animation — store processedFiles for later
+      streamingProcessedRef.current = processedFiles
+      setStreamingFiles(filesToStream)
+      toast.info(`Writing ${filesToStream.length} files...`)
+    } else {
+      // No streamable files — apply directly
+      applyGeneratedFiles(processedFiles)
     }
-    
-    toast.success('Project structure generated successfully')
+  }, [applyGeneratedFiles])
+
+  // Handle streaming completion
+  const handleStreamingComplete = useCallback(() => {
+    setStreamingFiles(null)
+
+    // Check if this was a single-file AI update (needs diff review)
+    if (pendingAfterStreamRef.current) {
+      const pending = pendingAfterStreamRef.current
+      pendingAfterStreamRef.current = null
+      setPendingChange(pending)
+      toast.info('Review AI changes — Accept or Reject')
+      return
+    }
+
+    // Multi-file generation — apply all files
+    const processedFiles = streamingProcessedRef.current
+    applyGeneratedFiles(processedFiles)
+  }, [applyGeneratedFiles])
+
+  // Cancel streaming — apply files immediately
+  const handleStreamingCancel = useCallback(() => {
+    setStreamingFiles(null)
+
+    if (pendingAfterStreamRef.current) {
+      const pending = pendingAfterStreamRef.current
+      pendingAfterStreamRef.current = null
+      setPendingChange(pending)
+      toast.info('Review AI changes — Accept or Reject')
+      return
+    }
+
+    const processedFiles = streamingProcessedRef.current
+    applyGeneratedFiles(processedFiles)
+    toast.info('Streaming skipped — files applied')
+  }, [applyGeneratedFiles])
+
+  // Flatten file tree to list
+  const flattenFiles = (nodes: FileNode[]): FileNode[] => {
+    const result: FileNode[] = []
+    for (const node of nodes) {
+      if (node.type === 'file') result.push(node)
+      if (node.children) result.push(...flattenFiles(node.children))
+    }
+    return result
   }
 
-  if (!project) {
+  // Install dependencies via CDN resolution
+  const handleInstallDeps = async (pkgNames?: string[], autoPreview = false) => {
+    const names = pkgNames || projectDeps.map(d => d.name)
+    if (names.length === 0) return
+    
+    setIsInstallingDeps(true)
+    setBottomTab('deps')
+    
+    try {
+      const result = await resolveDependencies(names, (dep) => {
+        setProjectDeps(prev => 
+          prev.map(d => d.name === dep.name ? dep : d)
+        )
+      })
+      
+      setProjectDeps(result.dependencies)
+      
+      const installed = result.dependencies.filter(d => d.status === 'installed').length
+      const failed = result.dependencies.filter(d => d.status === 'error').length
+      
+      if (failed === 0) {
+        toast.success(`${installed} dependencies installed successfully`)
+      } else {
+        toast.warning(`${installed} installed, ${failed} failed`)
+      }
+
+      // Auto-show preview after dependencies are installed
+      if (autoPreview) {
+        setTimeout(() => {
+          setPreviewVisible(true)
+          toast.success('Preview is ready')
+        }, 500)
+      }
+    } catch (error) {
+      console.error('Dependency install failed:', error)
+      toast.error('Failed to install dependencies')
+      // Still show preview even if deps failed
+      if (autoPreview) {
+        setTimeout(() => setPreviewVisible(true), 500)
+      }
+    } finally {
+      setIsInstallingDeps(false)
+    }
+  }
+
+  // Start a coding session when project loads
+  useEffect(() => {
+    if (!project || project.id === 'local') return
+    const firebaseUid = user?.uid
+    if (!firebaseUid) return
+
+    const startSession = async () => {
+      try {
+        const session = await createSession(firebaseUid, project.id, project.name)
+        setSessionId(session.id)
+        setSessionStart(session.started_at)
+      } catch (err) {
+        console.error('Failed to start session:', err)
+      }
+    }
+    startSession()
+
+    // End session on unmount
+    return () => {
+      if (sessionId) {
+        endSession(sessionId).catch(() => {})
+      }
+    }
+  }, [project?.id, user?.uid])
+
+  // Handle AI code change tracking
+  const handleAICodeChange = useCallback((change: CodeChange) => {
+    setSessionChanges(prev => {
+      const next = [...prev, change]
+      setSessionSkills(extractSkillsFromChanges(next))
+      return next
+    })
+    // Persist change to session
+    if (sessionId) {
+      addChangeToSession(sessionId, change).catch(() => {})
+    }
+  }, [sessionId])
+
+  if (isLoading || !project) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background text-foreground">
+      <div className="flex items-center justify-center h-screen bg-[#09090f] text-white/50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Loading CodePath AI IDE...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-violet-500/30 border-t-violet-500 mx-auto mb-3"></div>
+          <p className="text-[13px] text-white/30">Loading CodePath AI IDE...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground">
+    <div className="h-screen flex flex-col bg-[#09090f] text-white/70">
       {/* Header */}
       <EnhancedIDEHeader 
         project={project}
@@ -307,27 +867,130 @@ export default function EnhancedIDELayout() {
             />
           </Panel>
 
-          <PanelResizeHandle className="w-1 bg-white/10 hover:bg-white/20 transition-colors" />
+          <PanelResizeHandle className="w-px bg-white/[0.06] hover:bg-violet-500/30 hover:w-0.5 transition-all duration-150" />
 
-          {/* Code Editor */}
+          {/* Code Editor + Bottom Panels */}
           <Panel defaultSize={50} minSize={30}>
-            {previewVisible ? (
-              <PreviewPanel files={files} />
+            {/* Streaming code writer — shown when AI is generating files */}
+            {streamingFiles ? (
+              <StreamingCodeWriter
+                files={streamingFiles}
+                onComplete={handleStreamingComplete}
+                onCancel={handleStreamingCancel}
+                className="h-full"
+                speed={12}
+              />
+            ) : selectedDiffChange ? (
+              <DiffView
+                change={selectedDiffChange}
+                onClose={() => setSelectedDiffChange(null)}
+                className="h-full"
+              />
             ) : (
               <div className="h-full flex flex-col">
-                <EnhancedCodeEditor
-                  file={activeFile}
-                  onFileChange={handleCodeChange}
-                  onExecute={handleExecute}
-                  className="flex-1"
-                />
+                {/* Editor (top) + Preview (right split) when preview is visible */}
+                <div className="flex-1 min-h-0 flex">
+                  {/* Code Editor — always visible */}
+                  <div className={cn("min-w-0 h-full", previewVisible && files.length > 0 ? "flex-1" : "flex-1")}>
+                    {activeFile ? (
+                      <EnhancedCodeEditor
+                        file={activeFile}
+                        onFileChange={handleCodeChange}
+                        onExecute={handleExecute}
+                        className="h-full"
+                        pendingChange={pendingChange}
+                        onAcceptChange={handleAcceptChange}
+                        onRejectChange={handleRejectChange}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-white/40">
+                        <div className="text-center">
+                          <p className="text-sm">No file selected</p>
+                          <p className="text-xs mt-2">Select a file from the explorer or generate code</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Live Preview — keep mounted so iframe doesn't reload, hide with CSS */}
+                  <div
+                    className={cn(
+                      "h-full border-l border-white/[0.06] transition-all duration-200",
+                      previewVisible && files.length > 0
+                        ? "w-1/2 min-w-[300px] opacity-100"
+                        : "w-0 min-w-0 overflow-hidden opacity-0 pointer-events-none border-l-0"
+                    )}
+                  >
+                    {files.length > 0 && <PreviewPanel files={files} />}
+                  </div>
+                </div>
                 
-                {/* Output Panel */}
-                <OutputPanel
-                  output={output}
-                  isRunning={isExecuting}
-                  className="h-48 border-t border-white/10"
-                />
+                {/* Bottom Panel with tabs */}
+                <div className="h-48 border-t border-white/[0.06] flex flex-col">
+                  {/* Tab bar */}
+                  <div className="flex items-center bg-[#0a0a12] border-b border-white/[0.06] px-1">
+                    {(['output', 'timeline', 'skills', 'deps'] as const).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setBottomTab(tab)}
+                        className={`px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider transition-colors
+                          ${bottomTab === tab
+                            ? 'text-violet-400 border-b border-violet-500'
+                            : 'text-white/25 hover:text-white/40'
+                          }`}
+                        title={`Switch to ${tab} tab`}
+                      >
+                        {tab === 'output' && 'Output'}
+                        {tab === 'timeline' && `Timeline (${sessionChanges.length})`}
+                        {tab === 'skills' && `Skills (${sessionSkills.length})`}
+                        {tab === 'deps' && `Deps (${projectDeps.length})`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tab content */}
+                  <div className="flex-1 min-h-0">
+                    {bottomTab === 'output' && (
+                      <OutputPanel
+                        output={output}
+                        isRunning={isExecuting}
+                        className="h-full"
+                      />
+                    )}
+                    {bottomTab === 'timeline' && (
+                      <SessionTimeline
+                        changes={sessionChanges}
+                        sessionStart={sessionStart}
+                        onViewDiff={(change) => {
+                          setSelectedDiffChange(change)
+                        }}
+                        className="h-full"
+                      />
+                    )}
+                    {bottomTab === 'skills' && (
+                      <SkillSummary
+                        skills={sessionSkills}
+                        userChanges={sessionChanges.filter(c => c.source === 'user').length}
+                        aiChanges={sessionChanges.filter(c => c.source !== 'user').length}
+                        sessionDuration={
+                          sessionStart
+                            ? Math.floor((Date.now() - new Date(sessionStart).getTime()) / 1000)
+                            : 0
+                        }
+                        className="h-full"
+                      />
+                    )}
+                    {bottomTab === 'deps' && (
+                      <div className="h-full overflow-auto">
+                        <DependencyPanel
+                          dependencies={projectDeps}
+                          isInstalling={isInstallingDeps}
+                          onInstall={() => handleInstallDeps()}
+                          onRetry={() => handleInstallDeps()}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </Panel>
@@ -335,14 +998,18 @@ export default function EnhancedIDELayout() {
           {/* AI Panel */}
           {aiPanelVisible && (
             <>
-              <PanelResizeHandle className="w-1 bg-white/10 hover:bg-white/20 transition-colors" />
+              <PanelResizeHandle className="w-px bg-white/[0.06] hover:bg-violet-500/30 hover:w-0.5 transition-all duration-150" />
               <Panel defaultSize={30} minSize={20} maxSize={40}>
-                <DualAISystem
+              <DualAISystem
                   code={activeFile?.content || ''}
                   language={activeFile?.language || 'javascript'}
                   files={files}
                   onCodeUpdate={handleAICodeUpdate}
                   onFilesGenerated={handleFilesGenerated}
+                  onCodeChange={handleAICodeChange}
+                  initialPrompt={project?.prompt || undefined}
+                  activeFileName={activeFile?.name}
+                  activeFileId={activeFile?.id}
                   className="h-full"
                 />
               </Panel>
@@ -356,6 +1023,8 @@ export default function EnhancedIDELayout() {
         activePath={activeFile?.name ?? ''}
         language={activeFile?.language ?? 'javascript'}
         isRunning={isExecuting}
+        changeCount={sessionChanges.length}
+        sessionStart={sessionStart}
         className="h-6"
       />
     </div>

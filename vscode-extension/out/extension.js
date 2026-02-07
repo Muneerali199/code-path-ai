@@ -54,8 +54,11 @@ function activate(context) {
     const clearUserApiKeyCommand = vscode.commands.registerCommand('codepath-ai.clearUserApiKey', async () => {
         await aiProvider.handleClearUserApiKey();
     });
+    const openDashboardCommand = vscode.commands.registerCommand('codepath-ai.openDashboard', async () => {
+        await aiProvider.handleOpenDashboard();
+    });
     // Add all disposables to context
-    context.subscriptions.push(explainCodeCommand, generateCodeCommand, debugCodeCommand, analyzeCodeCommand, refactorCodeCommand, selectModelCommand, setUserApiKeyCommand, clearUserApiKeyCommand);
+    context.subscriptions.push(explainCodeCommand, generateCodeCommand, debugCodeCommand, analyzeCodeCommand, refactorCodeCommand, selectModelCommand, setUserApiKeyCommand, clearUserApiKeyCommand, openDashboardCommand);
 }
 exports.activate = activate;
 function deactivate() {

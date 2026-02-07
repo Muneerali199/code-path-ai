@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -263,7 +263,7 @@ async function sendChat(payload: ChatPayload, stream: boolean): Promise<string> 
     };
 
     if (stream) {
-        const response: AxiosResponse<any> = await axios.post(invokeUrl, payload, {
+        const response: any = await axios.post(invokeUrl, payload, {
             headers,
             responseType: 'stream',
             timeout: 600000
@@ -325,7 +325,7 @@ async function sendChat(payload: ChatPayload, stream: boolean): Promise<string> 
         return fullText;
     }
 
-    const response: AxiosResponse<any> = await axios.post(invokeUrl, payload, {
+    const response: any = await axios.post(invokeUrl, payload, {
         headers,
         timeout: 600000
     });
