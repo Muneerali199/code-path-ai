@@ -102,6 +102,11 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
   const fileRef = useRef(file)
   const prevFileIdRef = useRef(file.id)
 
+  // Flag to suppress onChange during programmatic setValue calls
+  // This prevents a race condition where setValue triggers onChange before the parent
+  // component's activeFileRef is updated, which would overwrite the wrong file's content.
+  const isSettingValueRef = useRef(false)
+
   // Keep fileRef synced for use in onChange callback
   useEffect(() => { fileRef.current = file }, [file])
 
@@ -120,10 +125,12 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
       if (model) {
         // Update language
         monaco.editor.setModelLanguage(model, file.language || 'javascript')
-        // Update value
+        // Update value — suppress onChange to prevent race condition with parent ref
         const currentVal = editor.getValue()
         if (currentVal !== (file.content || '')) {
+          isSettingValueRef.current = true
           editor.setValue(file.content || '')
+          isSettingValueRef.current = false
         }
         // Reset cursor to top
         editor.setPosition({ lineNumber: 1, column: 1 })
@@ -135,7 +142,9 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
       if (currentVal !== (file.content || '')) {
         // Preserve cursor position when syncing content
         const position = editor.getPosition()
+        isSettingValueRef.current = true
         editor.setValue(file.content || '')
+        isSettingValueRef.current = false
         if (position) editor.setPosition(position)
       }
     }
@@ -301,7 +310,9 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
     const currentContent = fileRef.current?.content || ''
     const editorContent = editor.getValue()
     if (editorContent !== currentContent) {
+      isSettingValueRef.current = true
       editor.setValue(currentContent)
+      isSettingValueRef.current = false
     }
 
     // Set up the custom theme
@@ -898,6 +909,8 @@ const EnhancedCodeEditor = React.memo(function EnhancedCodeEditor({
               defaultValue={file.content || ''}
               theme={currentTheme}
               onChange={(value) => {
+                // Skip programmatic setValue calls (prevents race condition on file switch)
+                if (isSettingValueRef.current) return
                 // Skip if value is same as the current file content (prevents mount-triggered onChange)
                 if (value !== undefined && value !== fileRef.current.content) {
                   onFileChange(value)

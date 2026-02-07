@@ -38,13 +38,6 @@ function useAuthReady() {
 }
 
 import PreviewPanel from '@/components/editor/PreviewPanel'
-import { DependencyPanel } from '@/components/editor/DependencyPanel'
-import {
-  detectDependencies,
-  resolveDependencies,
-  extractDepsFromPackageJson,
-  type Dependency,
-} from '@/services/dependencyService'
 
 interface FileNode {
   id: string
@@ -79,11 +72,9 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
   const [sessionSkills, setSessionSkills] = useState<string[]>([])
   const [sessionStart, setSessionStart] = useState<string | null>(null)
   const [selectedDiffChange, setSelectedDiffChange] = useState<CodeChange | null>(null)
-  const [bottomTab, setBottomTab] = useState<'output' | 'timeline' | 'skills' | 'deps'>('output')
+  const [bottomTab, setBottomTab] = useState<'output' | 'timeline' | 'skills'>('output')
 
-  // Dependency state
-  const [projectDeps, setProjectDeps] = useState<Dependency[]>([])
-  const [isInstallingDeps, setIsInstallingDeps] = useState(false)
+
 
   // Pending AI change state (for diff view + accept/reject)
   const [pendingChange, setPendingChange] = useState<{
@@ -629,30 +620,10 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
 
     toast.success('Project files applied successfully')
 
-    // Auto-detect and install dependencies
-    const allFilesList = flattenFiles(finalFiles)
-    const fileMeta = allFilesList.map(f => ({
-      path: f.name,
-      content: f.content || '',
-      language: f.language || '',
-    }))
-    const detectedPkgs = [
-      ...detectDependencies(fileMeta),
-      ...extractDepsFromPackageJson(fileMeta),
-    ]
-    const uniquePkgs = [...new Set(detectedPkgs)]
-
-    if (uniquePkgs.length > 0) {
-      setBottomTab('deps')
-      setProjectDeps(uniquePkgs.map(name => ({ name, version: 'latest', status: 'pending' as const })))
-      handleInstallDeps(uniquePkgs, true) // auto-preview after install
-    } else {
-      // No dependencies — show preview immediately
-      setTimeout(() => {
-        setPreviewVisible(true)
-        toast.success('Preview is ready')
-      }, 500)
-    }
+    // Show preview immediately — WebContainer handles deps + dev server internally
+    setTimeout(() => {
+      setPreviewVisible(true)
+    }, 300)
   }, [immediateSave])
 
   // Handle AI file generation
@@ -737,61 +708,6 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
     applyGeneratedFiles(processedFiles)
     toast.info('Streaming skipped — files applied')
   }, [applyGeneratedFiles])
-
-  // Flatten file tree to list
-  const flattenFiles = (nodes: FileNode[]): FileNode[] => {
-    const result: FileNode[] = []
-    for (const node of nodes) {
-      if (node.type === 'file') result.push(node)
-      if (node.children) result.push(...flattenFiles(node.children))
-    }
-    return result
-  }
-
-  // Install dependencies via CDN resolution
-  const handleInstallDeps = async (pkgNames?: string[], autoPreview = false) => {
-    const names = pkgNames || projectDeps.map(d => d.name)
-    if (names.length === 0) return
-    
-    setIsInstallingDeps(true)
-    setBottomTab('deps')
-    
-    try {
-      const result = await resolveDependencies(names, (dep) => {
-        setProjectDeps(prev => 
-          prev.map(d => d.name === dep.name ? dep : d)
-        )
-      })
-      
-      setProjectDeps(result.dependencies)
-      
-      const installed = result.dependencies.filter(d => d.status === 'installed').length
-      const failed = result.dependencies.filter(d => d.status === 'error').length
-      
-      if (failed === 0) {
-        toast.success(`${installed} dependencies installed successfully`)
-      } else {
-        toast.warning(`${installed} installed, ${failed} failed`)
-      }
-
-      // Auto-show preview after dependencies are installed
-      if (autoPreview) {
-        setTimeout(() => {
-          setPreviewVisible(true)
-          toast.success('Preview is ready')
-        }, 500)
-      }
-    } catch (error) {
-      console.error('Dependency install failed:', error)
-      toast.error('Failed to install dependencies')
-      // Still show preview even if deps failed
-      if (autoPreview) {
-        setTimeout(() => setPreviewVisible(true), 500)
-      }
-    } finally {
-      setIsInstallingDeps(false)
-    }
-  }
 
   // Start a coding session when project loads
   useEffect(() => {
@@ -928,7 +844,7 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
                 <div className="h-48 border-t border-white/[0.06] flex flex-col">
                   {/* Tab bar */}
                   <div className="flex items-center bg-[#0a0a12] border-b border-white/[0.06] px-1">
-                    {(['output', 'timeline', 'skills', 'deps'] as const).map(tab => (
+                    {(['output', 'timeline', 'skills'] as const).map(tab => (
                       <button
                         key={tab}
                         onClick={() => setBottomTab(tab)}
@@ -942,7 +858,6 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
                         {tab === 'output' && 'Output'}
                         {tab === 'timeline' && `Timeline (${sessionChanges.length})`}
                         {tab === 'skills' && `Skills (${sessionSkills.length})`}
-                        {tab === 'deps' && `Deps (${projectDeps.length})`}
                       </button>
                     ))}
                   </div>
@@ -979,16 +894,7 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
                         className="h-full"
                       />
                     )}
-                    {bottomTab === 'deps' && (
-                      <div className="h-full overflow-auto">
-                        <DependencyPanel
-                          dependencies={projectDeps}
-                          isInstalling={isInstallingDeps}
-                          onInstall={() => handleInstallDeps()}
-                          onRetry={() => handleInstallDeps()}
-                        />
-                      </div>
-                    )}
+
                   </div>
                 </div>
               </div>
