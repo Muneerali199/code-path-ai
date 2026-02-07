@@ -970,7 +970,7 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
           <PanelResizeHandle className="w-px bg-white/[0.06] hover:bg-violet-500/30 hover:w-0.5 transition-all duration-150" />
 
           {/* Code Editor + Bottom Panels */}
-          <Panel defaultSize={50} minSize={30}>
+          <Panel defaultSize={55} minSize={35}>
             {/* Streaming code writer — shown when AI is generating files */}
             {streamingFiles ? (
               <StreamingCodeWriter
@@ -1011,12 +1011,12 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
                       </div>
                     )}
                   </div>
-                  {/* Live Preview — equal size with editor, keep mounted so iframe doesn't reload */}
+                  {/* Live Preview — takes more space for better visibility */}
                   <div
                     className={cn(
                       "h-full border-l border-white/[0.06] transition-all duration-200",
                       previewVisible && files.length > 0
-                        ? "flex-1 opacity-100"
+                        ? "flex-[1.4] min-w-0 opacity-100"
                         : "w-0 min-w-0 overflow-hidden opacity-0 pointer-events-none border-l-0"
                     )}
                   >
@@ -1024,8 +1024,8 @@ export default function EnhancedIDELayout({ projectId }: EnhancedIDELayoutProps)
                   </div>
                 </div>
                 
-                {/* Bottom Panel with tabs */}
-                <div className="h-48 border-t border-white/[0.06] flex flex-col">
+                {/* Bottom Panel with tabs — compact to give preview more room */}
+                <div className="h-32 border-t border-white/[0.06] flex flex-col">
                   {/* Tab bar */}
                   <div className="flex items-center bg-[#0a0a12] border-b border-white/[0.06] px-1">
                     {(['output', 'timeline', 'skills'] as const).map(tab => (

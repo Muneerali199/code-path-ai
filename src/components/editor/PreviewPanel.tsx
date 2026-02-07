@@ -386,6 +386,8 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
   const terminalOutputRef = useRef('')
   const MAX_ERROR_LOG = 4000
   const [hasCompileError, setHasCompileError] = useState(false)
+  const autoFixTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasAutoFixedRef = useRef(false)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const containerRef = useRef<WebContainer | null>(null)
@@ -521,6 +523,7 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
     term.clear()
     terminalOutputRef.current = '' // Reset error log on fresh boot
     setHasCompileError(false)
+    hasAutoFixedRef.current = false // Reset auto-fix on fresh boot
 
     try {
       // Boot WebContainer
@@ -633,6 +636,7 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
           await containerRef.current!.mount(fsTree)
           writeln('✓ Files synced (HMR)\r\n', 'green')
           setHasCompileError(false) // Clear error state on successful sync
+          hasAutoFixedRef.current = false // Reset auto-fix flag on successful sync
         } catch (err: any) {
           writeln(`✗ File sync failed: ${err.message}\r\n`, 'red')
         }
@@ -643,15 +647,32 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
   }, [filesHash, files, status, bootAndRun, writeln])
 
   const handleAIFix = useCallback(async () => {
-    if (!onRequestAIFix) return
+    if (!onRequestAIFix || isFixing) return
     setIsFixing(true)
+    hasAutoFixedRef.current = true
     try {
       const errorLog = terminalOutputRef.current.slice(-MAX_ERROR_LOG)
       await onRequestAIFix(errorLog)
     } finally {
       setIsFixing(false)
     }
-  }, [onRequestAIFix])
+  }, [onRequestAIFix, isFixing])
+
+  // Auto-trigger AI fix when compile error is detected (debounced to collect full error)
+  useEffect(() => {
+    if (hasCompileError && onRequestAIFix && !isFixing && !hasAutoFixedRef.current) {
+      // Wait 2s to accumulate full error output before auto-fixing
+      autoFixTimerRef.current = setTimeout(() => {
+        handleAIFix()
+      }, 2000)
+    }
+    return () => {
+      if (autoFixTimerRef.current) {
+        clearTimeout(autoFixTimerRef.current)
+        autoFixTimerRef.current = null
+      }
+    }
+  }, [hasCompileError, onRequestAIFix, isFixing, handleAIFix])
 
   const handleRefresh = useCallback(() => {
     if (iframeRef.current && previewUrl) {
@@ -730,16 +751,21 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Fix with AI — shown when compile errors detected */}
+          {/* Fix with AI — shown when compile errors detected, auto-triggers */}
           {hasCompileError && onRequestAIFix && status === 'ready' && (
             <button
               onClick={handleAIFix}
               disabled={isFixing}
-              title="Fix errors with AI"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors disabled:opacity-50"
+              title={isFixing ? "AI is auto-fixing errors..." : "Fix errors with AI"}
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors disabled:opacity-70",
+                isFixing
+                  ? "bg-violet-500/20 text-violet-300 animate-pulse"
+                  : "bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:text-red-200"
+              )}
             >
               {isFixing ? (
-                <><Loader2 className="h-3 w-3 animate-spin" /> Fixing...</>
+                <><Loader2 className="h-3 w-3 animate-spin" /> AI Fixing...</>
               ) : (
                 <><Wand2 className="h-3 w-3" /> Fix with AI</>
               )}
@@ -789,7 +815,7 @@ const PreviewPanel = React.memo(function PreviewPanel({ files, className, onRequ
       <div
         className={cn(
           "shrink-0 border-b border-white/[0.06] overflow-hidden transition-all duration-200",
-          termOpen ? "h-[220px]" : "h-0 border-b-0"
+          termOpen ? "h-[160px]" : "h-0 border-b-0"
         )}
       >
         <div
